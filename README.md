@@ -7,7 +7,7 @@ It is easy to include in other projects (just include a single .h file) and has 
 
 # How to run test
 
-A sample usage is provided in file bootest.cpp, compiled and run with :
+A sample usage is provided in file bootest.cpp, compile and run with :
 
     make
     ./Bootest 100000000
