@@ -1,4 +1,4 @@
-CC=g++-4.9
+CC=g++
 CFLAGS = -O3 -std=c++11
 EXEC=Bootest
 all: $(EXEC)
