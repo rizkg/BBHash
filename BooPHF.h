@@ -448,7 +448,7 @@ namespace boomphf {
 		
 		 // epsilon =  64 / _nb_bits_per_rank_sample   bits
 		// additional size for rank is epsilon * _size
-		static const uint64_t _nb_bits_per_rank_sample = 256; //256
+		static const uint64_t _nb_bits_per_rank_sample = 512; //512 seems ok
 		std::vector<uint64_t> _ranks;
 	};
 	

@@ -37,26 +37,32 @@ u_int64_t nelem = 100000000;
 int nthreads = 1;
 int main (int argc, char* argv[])
 {
+	bool check_correctness = false;
+	
+	bool bench_lookup = false;
 	
 	
 	if(argc >=2 )
 	{
 		nelem = strtoul(argv[1], NULL,0);
 	}
-	if(argc ==3 )
+	for (int ii=2; ii<argc; ii++)
 	{
-		nthreads = atoi(argv[2]);
+		if(!strcmp("-check",argv[ii])) check_correctness= true;
+		if(!strcmp("-bench",argv[ii])) bench_lookup= true;
 	}
-	
-	printf("Construct a BooPHF with  %lli elements (%lli MB for holding elems in ram) \n",nelem,nelem*sizeof(u_int64_t)/1024LL/1024LL);
 
 	
 	
+	printf("Construct a BooPHF with  %lli elements (%lli MB for holding elems in ram) \n",nelem,nelem*sizeof(u_int64_t)/1024LL/1024LL);
+	
+	
+	
 	//creating some random input data
-//	srandomdev(); //init random generator
-//	data = (u_int64_t * ) calloc(nelem,sizeof(u_int64_t));
-//	for (u_int64_t i = 0; i < nelem; i++)
-//		data[i] = random64();
+	//	srandomdev(); //init random generator
+	//	data = (u_int64_t * ) calloc(nelem,sizeof(u_int64_t));
+	//	for (u_int64_t i = 0; i < nelem; i++)
+	//		data[i] = random64();
 	
 	
 	static std::mt19937_64 rng;
@@ -68,26 +74,26 @@ int main (int argc, char* argv[])
 	///create the boophf
 	
 	auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
-
+	
 	clock_t begin, end;
 	begin = clock();
 	
 	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,2.4);
 	
 	end = clock();
-
+	
 	printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem, (double)(end - begin) / CLOCKS_PER_SEC);
-
+	
 	u_int64_t mphf_value;
 	
 	printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
-
 	
-#ifdef CHECK_MPHF
-	//test the mphf
-	u_int64_t nb_collision_detected = 0;
-	u_int64_t range_problems = 0;
-	char * check_table = (char * ) calloc(nelem,sizeof(char));
+	
+	if(check_correctness)	//test the mphf
+	{
+		u_int64_t nb_collision_detected = 0;
+		u_int64_t range_problems = 0;
+		char * check_table = (char * ) calloc(nelem,sizeof(char));
 		for (u_int64_t i = 0; i < nelem; i++)
 		{
 			mphf_value = bphf->lookup(data[i]);
@@ -105,20 +111,40 @@ int main (int argc, char* argv[])
 				nb_collision_detected++;
 			}
 		}
-	
-	if(nb_collision_detected ==  0 && range_problems ==0)
-	{
-		printf(" --- boophf working correctly --- \n");
+		
+		if(nb_collision_detected ==  0 && range_problems ==0)
+		{
+			printf(" --- boophf working correctly --- \n");
+		}
+		else
+		{
+			printf("!!! problem, %llu collisions detected; %llu out of range !!!\n",nb_collision_detected,range_problems);
+			
+		}
+		
+		
+		free(check_table);
 	}
-	else
+	
+	
+	
+	if(bench_lookup)
 	{
-		printf("!!! problem, %llu collisions detected; %llu out of range !!!\n",nb_collision_detected,range_problems);
-
+		u_int64_t dumb=0;
+		begin = clock();
+		for (u_int64_t i = 0; i < nelem; i++)
+		{
+			mphf_value = bphf->lookup(data[i]);
+			
+			//do some silly work
+			dumb+= mphf_value;
+			
+		}
+		
+		end = clock();
+		printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem,dumb);
 	}
 	
-	
-	free(check_table);
-#endif
 	
 	free(data);
 	return EXIT_SUCCESS;
