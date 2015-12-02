@@ -577,7 +577,7 @@ namespace boomphf {
 		
 
 		template <typename Range>
-		mphf( size_t n, Range const& input_range, double gamma = 2.4) :
+		mphf( size_t n, Range const& input_range, double gamma = 2.5) :
 		_gamma(gamma), _hash_domain(size_t(ceil(double(n) * gamma))), _nelem(n)
 		{
 			

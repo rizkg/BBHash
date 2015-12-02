@@ -78,7 +78,7 @@ int main (int argc, char* argv[])
 	clock_t begin, end;
 	begin = clock();
 	
-	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,2.4);
+	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,2.5);
 	
 	end = clock();
 	
