@@ -16,10 +16,6 @@
 #include <string.h>
 
 
-
-//#include <algorithm>
-//#include <cmath>
-
 namespace boomphf {
 	
 ////////////////////////////////////////////////////////////////
@@ -81,7 +77,7 @@ namespace boomphf {
 			partial =0;
 			for (int ii=0; ii<64;ii++) partial_threaded[ii]=0;
 			for (int ii=0; ii<64;ii++) done_threaded[ii]=0;
-			subdiv= 100;
+			subdiv= 1000;
 			steps = (double)todo / (double)subdiv;
 			
 			if(!timer_mode)
@@ -176,7 +172,7 @@ namespace boomphf {
 					
 					fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
 							message.c_str(),
-							100*(double)done/todo,
+							100*(double)total_done/todo,
 							min_e,elapsed,min_r,rem);
 				}
 				else
@@ -390,6 +386,14 @@ namespace boomphf {
 			//return (_bitArray[pos >> 6] & (1ULL << (pos & 63) )  ) ;//renvoit nul ou non nul (pas 1 )
 		}
 		
+		//atomically   return old val and set to 1
+		uint64_t atomic_test_and_set(uint64_t pos)
+		{
+			uint64_t oldval = 	__sync_fetch_and_or (_bitArray + (pos >> 6), (uint64_t) (1ULL << (pos & 63)) );
+			
+			return  ( oldval >> (pos & 63 ) ) & 1;
+		}
+		
 		
 		//set bit pos to 1
 		void set(uint64_t pos)
@@ -555,6 +559,25 @@ namespace boomphf {
 #pragma mark mphf
 ////////////////////////////////////////////////////////////////
 
+	
+#define NBBUFF 10000
+	
+	template<typename Range,typename Iterator>
+	struct thread_args
+	{
+		void * boophf;
+		Range const * range;
+		Iterator  it;
+		int level;
+	};
+	
+	//forward declaration
+	template <typename elem_t, typename Hasher_t, typename Range>
+	void * thread_initLevel0(void * args);
+	
+	template <typename elem_t, typename Hasher_t, typename Range>
+	void * thread_processLevel(void * args);
+	
 
 
 	template <typename elem_t, typename Hasher_t>
@@ -568,6 +591,8 @@ namespace boomphf {
 		
 		~mphf()
 		{
+			pthread_mutex_destroy(&_mutex);
+
 			for(int ii=0; ii<_nb_levels; ii++)
 			{
 				delete _levels[ii];
@@ -577,8 +602,8 @@ namespace boomphf {
 		
 
 		template <typename Range>
-		mphf( size_t n, Range const& input_range, double gamma = 2.5) :
-		_gamma(gamma), _hash_domain(size_t(ceil(double(n) * gamma))), _nelem(n)
+		mphf( size_t n, Range const& input_range,int num_thread = 1, double gamma = 2.5) :
+		_gamma(gamma), _hash_domain(size_t(ceil(double(n) * gamma))), _nelem(n), _num_thread(num_thread)
 		{
 			
 			setup();
@@ -593,7 +618,7 @@ namespace boomphf {
 				processLevel(input_range,ii);
 			}
 			
-			_progressBar.finish();
+			_progressBar.finish_threaded();
 
 			
 			_bitset->build_ranks();
@@ -643,12 +668,134 @@ namespace boomphf {
 			return totalsize;
 		}
 		
+		template <typename Range,typename Iterator>
+		void pthread_init0(elem_t * buffer, Range input_range, Iterator * shared_it)
+		{
+			uint64_t nb_done =0;
+			
+			int tid =  __sync_fetch_and_add (&_nb_living, 1);
+			
+			auto until = input_range.end();
+			
+			
+			uint64_t inbuff =0;
+			
+			for (bool isRunning=true;  isRunning ; )
+			{
+				
+				pthread_mutex_lock(&_mutex);
+				
+				//printf("A tid %i  it %ld  entered mutex \n",tid,*shared_it -(Iterator ) ddd);
+				//copy n items into buffer
+				for(; inbuff<NBBUFF && (*shared_it)!=until;  (*shared_it)++)
+				{
+					buffer[inbuff]= *(*shared_it); inbuff++;
+				}
+				
+				if((*shared_it)==until) isRunning =false;
+				//printf("B tid %i  it %ld will exit mutex inbuff %llu  \n",tid,*shared_it - (Iterator ) ddd,inbuff);
+				
+				pthread_mutex_unlock(&_mutex);
+				
+				
+				//do work on the n elems of the buffer
+				for(int ii=0; ii<inbuff ; ii++)
+				{
+					elem_t val = buffer[ii];
+					
+					//printf("val  %llu  inbuf %i  tid %i \n",val,ii,tid);
+					
+					auto hashes = _hasher(val);
+					
+					insertIntoLevel(hashes,0);
+					
+					nb_done++;
+					if((nb_done&1023) ==0 ) {_progressBar.inc(nb_done,tid);nb_done=0; }
+					
+				}
+				
+				inbuff = 0;
+			}
+			
+		}
+	
+		template <typename Range,typename Iterator>
+		void pthread_processLevel(elem_t * buffer, Range input_range, Iterator * shared_it, int i)
+		{
+			uint64_t nb_done =0;
+			int tid =  __sync_fetch_and_add (&_nb_living, 1);
+			auto until = input_range.end();
+			
+			
+			uint64_t inbuff =0;
 
+			for (bool isRunning=true;  isRunning ; )
+			{
+				
+				//safely copy n items into buffer
+				pthread_mutex_lock(&_mutex);
+				for(; inbuff<NBBUFF && (*shared_it)!=until;  (*shared_it)++)
+				{
+					buffer[inbuff]= *(*shared_it); inbuff++;
+				}
+				if((*shared_it)==until) isRunning =false;
+				pthread_mutex_unlock(&_mutex);
+				
+				
+
+				//do work on the n elems of the buffer
+				for(int ii=0; ii<inbuff ; ii++)
+				{
+					elem_t val = buffer[ii];
+					
+					auto hashes = _hasher(val);
+					int level = getLevel(hashes, i+1); //should be safe
+					
+					if(level == i+1)
+					{
+						//insert to level i+1 : either next level of the cascade or final hash if last level reached
+						if(i+1== _nb_levels-1) //stop cascade here, insert into exact hash
+						{
+							
+							uint64_t hashidx =  __sync_fetch_and_add (& _hashidx, 1);
+							
+							pthread_mutex_lock(&_mutex); //see later if possible to avoid this, mais pas bcp item vont la
+
+							_bitset->set(hashidx);
+							_final_hash[val] = hashidx;
+							
+							pthread_mutex_unlock(&_mutex);
+						}
+						else
+						{
+							insertIntoLevel(hashes,i+1); //should be safe
+						}
+					}
+					else if (level == i)
+					{
+						//insert to table level i
+						uint64_t hashi = _levels[i]->idx_begin + hashes[i] % _levels[i]->hash_domain;
+						_bitset->set(hashi);
+					}
+					
+					nb_done++;
+					if((nb_done&1023) ==0 ) {_progressBar.inc(nb_done,tid);nb_done=0; }
+
+				}
+				
+				inbuff = 0;
+			}
+			
+		}
 		
 		private :
 		
 		void setup()
 		{
+			pthread_mutex_init(&_mutex, NULL);
+
+
+			
 			double proba_collision = 1.0 - ( (1.0 -  pow( 1.0 - 1.0/(_gamma*_nelem), _nelem ) )  *_gamma) ;
 			double sum_geom = proba_collision / (1.0 - proba_collision);
 			//printf("proba collision %f  sum_geom  %f  bitvector size %lli \n",proba_collision,sum_geom,(uint64_t) (_hash_domain + (2.0*proba_collision*_hash_domain)));
@@ -704,15 +851,12 @@ namespace boomphf {
 		{
 			uint64_t hashi = _levels[i]->idx_begin +    hashes[i] % _levels[i]->hash_domain;
 			
-			if( ! (*_bitset)[hashi])
-			{
-				_bitset->set(hashi);
-			}
-			else
+			if( _bitset->atomic_test_and_set(hashi) )
 			{
 				_levels[i]->bloom->insert(hashes);
+
 			}
-			
+
 		}
 		
 		
@@ -720,17 +864,27 @@ namespace boomphf {
 		template <typename Range>
 		void initLevel0(Range const& input_range)
 		{
-			uint64_t nb_done =0;
-			for (auto const &val: input_range) {
-				
-				auto hashes = _hasher(val);
-				
-				insertIntoLevel(hashes,0);
-				
-				nb_done++;
-				if((nb_done&1023) ==0 ) {_progressBar.inc(nb_done);nb_done=0; }
+			_nb_living =0;
+			//create  threads
+			pthread_t *tab_threads= new pthread_t [_num_thread];
+			
+			typedef decltype(input_range.begin()) it_type;
+			
+			thread_args<Range, it_type> t_arg; // meme arg pour tous
+			t_arg.boophf = this;
+			t_arg.range = &input_range;
+			t_arg.it =  input_range.begin();
+			
+			for(int ii=0;ii<_num_thread;ii++)
+			{
+				pthread_create (&tab_threads[ii], NULL,  thread_initLevel0<elem_t, Hasher_t, Range>, &t_arg); //&t_arg[ii]
 			}
 			
+			//joining
+			for(int ii=0;ii<_num_thread;ii++)
+			{
+				pthread_join(tab_threads[ii], NULL);
+			}
 		}
 		
 		
@@ -738,46 +892,28 @@ namespace boomphf {
 		template <typename Range>
 		void processLevel(Range const& input_range,int i)
 		{
-			
-			uint64_t hashi;
-			uint64_t nb_done =0;
-			
 			//clear level before deblooming
 			_bitset->clear(_levels[i]->idx_begin, _levels[i]->hash_domain);
+			_hashidx = _levels[i+1]->idx_begin;
+
+			_nb_living =0;
+			//create  threads
+			pthread_t *tab_threads= new pthread_t [_num_thread];
+			typedef decltype(input_range.begin()) it_type;
+			thread_args<Range, it_type> t_arg; // meme arg pour tous
+			t_arg.boophf = this;
+			t_arg.range = &input_range;
+			t_arg.it =  input_range.begin();
+			t_arg.level = i;
 			
-			uint64_t hashidx = _levels[i+1]->idx_begin;
-			
-			////////// loop to detect FP of bloom and insert into next level
-			for (auto const& val: input_range) {
-				
-				auto hashes = _hasher(val);
-				int level = getLevel(hashes, i+1);
-				
-				if(level == i+1)
-				{
-					//insert to level i+1 : either next level of the cascade or final hash if last level reached
-					
-					if(i+1== _nb_levels-1) //stop cascade here, insert into exact hash
-					{
-						_bitset->set(hashidx);
-						_final_hash[val] = hashidx;
-						hashidx++;
-					}
-					else
-					{
-						insertIntoLevel(hashes,i+1);
-					}
-				}
-				else if (level == i)
-				{
-					//insert to table level i
-					hashi = _levels[i]->idx_begin + hashes[i] % _levels[i]->hash_domain;
-					//printf("nc %llu --> %llu\n",val,hashi);
-					_bitset->set(hashi);
-				}
-				
-				nb_done++;
-				if((nb_done&1023) ==0 ) {_progressBar.inc(nb_done);nb_done=0; }
+			for(int ii=0;ii<_num_thread;ii++)
+			{
+				pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range>, &t_arg); //&t_arg[ii]
+			}
+			//joining
+			for(int ii=0;ii<_num_thread;ii++)
+			{
+				pthread_join(tab_threads[ii], NULL);
 			}
 		}
 	
@@ -791,8 +927,63 @@ namespace boomphf {
 		uint64_t _nelem;
 		std::unordered_map<elem_t,uint64_t> _final_hash;
 		Progress _progressBar;
-
+		int _nb_living;
+		int _num_thread;
+		uint64_t _hashidx;
+		
+	public:
+		pthread_mutex_t _mutex;
 	};
 
+////////////////////////////////////////////////////////////////
+#pragma mark -
+#pragma mark threading
+////////////////////////////////////////////////////////////////
 	
+	//bon sang de template
+	template <typename elem_t, typename Hasher_t, typename Range>
+	void * thread_initLevel0(void * args)
+	{
+		if(args ==NULL) return NULL;
+		
+		typedef decltype(((Range*)nullptr)->begin()) it_type; // hmmm I hate this, I dont know how to avoid the template type nightmare
+		
+		thread_args<Range,it_type> *targ = (thread_args<Range,it_type>*) args;
+		mphf<elem_t, Hasher_t>  * obw = (mphf<elem_t, Hasher_t > *) targ->boophf;
+		elem_t * buffer =  (elem_t *)  malloc(NBBUFF*sizeof(elem_t));
+		pthread_mutex_t * mutex =  & obw->_mutex;
+		
+		//get starting iterator for this thread, must be protected (must not be currently used by other thread to copy elems in b uff)
+		pthread_mutex_lock(mutex);
+		it_type *  startit = & targ->it;
+		pthread_mutex_unlock(mutex);
+
+		obw->pthread_init0(buffer, *(targ->range), startit);
+		
+		free(buffer);
+		return NULL;
+	}
+	
+	template <typename elem_t, typename Hasher_t, typename Range>
+	void * thread_processLevel(void * args)
+	{
+		if(args ==NULL) return NULL;
+		
+		typedef decltype(((Range*)nullptr)->begin()) it_type;
+		thread_args<Range,it_type> *targ = (thread_args<Range,it_type>*) args;
+		
+		mphf<elem_t, Hasher_t>  * obw = (mphf<elem_t, Hasher_t > *) targ->boophf;
+		int level = targ->level;
+		elem_t * buffer =  (elem_t *)  malloc(NBBUFF*sizeof(elem_t));
+		pthread_mutex_t * mutex =  & obw->_mutex;
+		
+		pthread_mutex_lock(mutex);
+		it_type *  startit = & targ->it;
+		pthread_mutex_unlock(mutex);
+		
+		obw->pthread_processLevel(buffer, *(targ->range), startit,level); // i
+		
+		free(buffer);
+		return NULL;
+	}
 }

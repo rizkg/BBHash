@@ -46,7 +46,12 @@ int main (int argc, char* argv[])
 	{
 		nelem = strtoul(argv[1], NULL,0);
 	}
-	for (int ii=2; ii<argc; ii++)
+	
+	if(argc >=3 )
+		nthreads = atoi(argv[2]);
+
+	
+	for (int ii=3; ii<argc; ii++)
 	{
 		if(!strcmp("-check",argv[ii])) check_correctness= true;
 		if(!strcmp("-bench",argv[ii])) bench_lookup= true;
@@ -76,13 +81,20 @@ int main (int argc, char* argv[])
 	auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
 	
 	clock_t begin, end;
-	begin = clock();
 	
-	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,2.5);
+	double t_begin,t_end; struct timeval timet;
 	
-	end = clock();
+	gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 	
-	printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem, (double)(end - begin) / CLOCKS_PER_SEC);
+	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,2.5);
+	
+	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
+
+	double elapsed = t_end - t_begin;
+
+	
+	
+	printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
 	
 	u_int64_t mphf_value;
 	
@@ -107,7 +119,7 @@ int main (int argc, char* argv[])
 			}
 			else
 			{
-				//printf("collision for val %lli \n",mphf_value);
+				printf("collision for val %lli \n",mphf_value);
 				nb_collision_detected++;
 			}
 		}
@@ -119,6 +131,8 @@ int main (int argc, char* argv[])
 		else
 		{
 			printf("!!! problem, %llu collisions detected; %llu out of range !!!\n",nb_collision_detected,range_problems);
+			return EXIT_FAILURE;
+
 			
 		}
 		
