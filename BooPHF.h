@@ -383,7 +383,6 @@ namespace boomphf {
 		uint64_t operator[](uint64_t pos) const
 		{
 			return (_bitArray[pos >> 6] >> (pos & 63 ) ) & 1;
-			//return (_bitArray[pos >> 6] & (1ULL << (pos & 63) )  ) ;//renvoit nul ou non nul (pas 1 )
 		}
 		
 		//atomically   return old val and set to 1
@@ -398,10 +397,6 @@ namespace boomphf {
 		//set bit pos to 1
 		void set(uint64_t pos)
 		{
-			if(pos>=_size)
-			{
-				resize( _size * 1.1);
-			}
 			assert(pos<_size);
 			//_bitArray [pos >> 6] |=   (1ULL << (pos & 63) ) ;
 			__sync_fetch_and_or (_bitArray + (pos >> 6), (1ULL << (pos & 63)) );
@@ -579,7 +574,6 @@ namespace boomphf {
 	void * thread_processLevel(void * args);
 	
 
-
 	template <typename elem_t, typename Hasher_t>
 	class mphf {
 		
@@ -602,14 +596,17 @@ namespace boomphf {
 		
 
 		template <typename Range>
-		mphf( size_t n, Range const& input_range,int num_thread = 1, double gamma = 2.5) :
-		_gamma(gamma), _hash_domain(size_t(ceil(double(n) * gamma))), _nelem(n), _num_thread(num_thread)
+		mphf( size_t n, Range const& input_range,int num_thread = 1, bool fastmode = true,  double gamma = 2.5) :
+		_gamma(gamma), _hash_domain(size_t(ceil(double(n) * gamma))), _nelem(n), _num_thread(num_thread), _fastmode (fastmode)
 		{
 			
 			setup();
 			
 			_progressBar.timer_mode=1;
-			_progressBar.init( _nelem * _nb_levels ,"Building BooPHF");
+			if(_fastmode)
+				_progressBar.init( _nelem * 3 +  ( _nelem * _proba_collision * _proba_collision) * (_nb_levels-3)    ,"Building BooPHF");
+			else
+				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF");
 			
 			initLevel0(input_range);
 			
@@ -623,27 +620,34 @@ namespace boomphf {
 			
 			_bitset->build_ranks();
 			
+			_lastbitsetrank = _bitset->rank( _bitset->size() -1);
+			
+			//printf("used temp ram for construction : %lli MB \n",setLevel2.capacity()* sizeof(elem_t) /1024LL/1024LL);
+			
+			std::vector<elem_t>().swap(setLevel2);   // clear setLevel2 reallocating
+			
 		}
 		
 		
 		uint64_t lookup(elem_t elem)
 		{
 			auto hashes = _hasher(elem);
-			uint64_t non_minimal_hp;
+			uint64_t non_minimal_hp,minimal_hp;
 			
 			int level =  getLevel(hashes);
 			
 			
 			if( level == (_nb_levels-1))
 			{
-				non_minimal_hp = _final_hash[elem];
+				minimal_hp = _final_hash[elem] + _lastbitsetrank;
+				return minimal_hp;
 			}
 			else
 			{
 				non_minimal_hp = _levels[level]->idx_begin + ( hashes[level] %  _levels[level]->hash_domain);
 			}
 			
-			uint64_t minimal_hp = _bitset->rank(non_minimal_hp);
+			 minimal_hp = _bitset->rank(non_minimal_hp);
 			
 			return minimal_hp;
 		}
@@ -685,7 +689,6 @@ namespace boomphf {
 				
 				pthread_mutex_lock(&_mutex);
 				
-				//printf("A tid %i  it %ld  entered mutex \n",tid,*shared_it -(Iterator ) ddd);
 				//copy n items into buffer
 				for(; inbuff<NBBUFF && (*shared_it)!=until;  (*shared_it)++)
 				{
@@ -693,7 +696,6 @@ namespace boomphf {
 				}
 				
 				if((*shared_it)==until) isRunning =false;
-				//printf("B tid %i  it %ld will exit mutex inbuff %llu  \n",tid,*shared_it - (Iterator ) ddd,inbuff);
 				
 				pthread_mutex_unlock(&_mutex);
 				
@@ -703,15 +705,12 @@ namespace boomphf {
 				{
 					elem_t val = buffer[ii];
 					
-					//printf("val  %llu  inbuf %i  tid %i \n",val,ii,tid);
-					
 					auto hashes = _hasher(val);
 					
 					insertIntoLevel(hashes,0);
 					
 					nb_done++;
 					if((nb_done&1023) ==0 ) {_progressBar.inc(nb_done,tid);nb_done=0; }
-					
 				}
 				
 				inbuff = 0;
@@ -724,9 +723,16 @@ namespace boomphf {
 		{
 			uint64_t nb_done =0;
 			int tid =  __sync_fetch_and_add (&_nb_living, 1);
+			
+			
+			if(i >= 2 && _fastmode)
+			{
+				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevel2[0]), static_cast<const elem_t*>( (&setLevel2[0]) +setLevel2.size()));
+				input_range = data_iterator;
+			}
+			
+			
 			auto until = input_range.end();
-			
-			
 			uint64_t inbuff =0;
 
 			for (bool isRunning=true;  isRunning ; )
@@ -742,7 +748,6 @@ namespace boomphf {
 				pthread_mutex_unlock(&_mutex);
 				
 				
-
 				//do work on the n elems of the buffer
 				for(int ii=0; ii<inbuff ; ii++)
 				{
@@ -753,17 +758,25 @@ namespace boomphf {
 					
 					if(level == i+1)
 					{
+						if(i == 1 && _fastmode)
+						{
+							uint64_t idxl2 = __sync_fetch_and_add(& _idxLevelSetLevel2,1);
+							//si depasse taille attendue pour setLevel2, fall back sur slow mode mais devrait pas arriver si hash ok et proba avec nous
+							if(idxl2> setLevel2.size())
+								_fastmode = false;
+							else
+								setLevel2[idxl2] = val; // create set E2
+						}
+						
 						//insert to level i+1 : either next level of the cascade or final hash if last level reached
 						if(i+1== _nb_levels-1) //stop cascade here, insert into exact hash
 						{
-							
 							uint64_t hashidx =  __sync_fetch_and_add (& _hashidx, 1);
 							
 							pthread_mutex_lock(&_mutex); //see later if possible to avoid this, mais pas bcp item vont la
-
-							_bitset->set(hashidx);
+							//_bitset->set(hashidx);
+							// calc rank de fin  precedent level qq part, puis init hashidx avec ce rank, direct minimal, pas besoin inser ds bitset et rank
 							_final_hash[val] = hashidx;
-							
 							pthread_mutex_unlock(&_mutex);
 						}
 						else
@@ -794,15 +807,20 @@ namespace boomphf {
 		{
 			pthread_mutex_init(&_mutex, NULL);
 
-
+			if(_fastmode)
+				setLevel2.resize(0.035 * (double)_nelem );
 			
-			double proba_collision = 1.0 - ( (1.0 -  pow( 1.0 - 1.0/(_gamma*_nelem), _nelem ) )  *_gamma) ;
-			double sum_geom = proba_collision / (1.0 - proba_collision);
+			 _proba_collision = 1.0 - ( (1.0 -  pow( 1.0 - 1.0/(_gamma*_nelem), _nelem ) )  *_gamma) ;
+			double sum_geom = _proba_collision / (1.0 - _proba_collision);
 			//printf("proba collision %f  sum_geom  %f  bitvector size %lli \n",proba_collision,sum_geom,(uint64_t) (_hash_domain + (2.0*proba_collision*_hash_domain)));
 			
 			int bloom_bit_per_elem = 12;//12 / 5
 			
-			_nb_levels = 6;
+			if(_fastmode)
+				_nb_levels = 7; // in fast mode we can afford extra level
+			else
+				_nb_levels = 6;
+
 			
 			_levels = (level **) malloc(_nb_levels * sizeof(level *) );
 			
@@ -815,13 +833,13 @@ namespace boomphf {
 				_levels[ii]->idx_begin = previous_idx;
 				
 				// round size to nearet superior multiple of 64, makes it easier to clear a level
-				_levels[ii]->hash_domain =  (( (uint64_t) (_hash_domain * pow(proba_collision,ii)) + 63) / 64 ) * 64;
+				_levels[ii]->hash_domain =  (( (uint64_t) (_hash_domain * pow(_proba_collision,ii)) + 63) / 64 ) * 64;
 				previous_idx += _levels[ii]->hash_domain;
 				
-				//printf("build level %i bit array : start %llu, size %llu, bloom %llu \n",ii,_levels[ii]->idx_begin,_levels[ii]->hash_domain,(uint64_t)( pow(proba_collision,ii+1) * _nelem * bloom_bit_per_elem) );
+				//printf("build level %i bit array : start %12llu, size %12llu, bloom %12llu \n",ii,_levels[ii]->idx_begin,_levels[ii]->hash_domain,(uint64_t)( pow(_proba_collision,ii+1) * _nelem * bloom_bit_per_elem) );
 				
 				if(ii<(_nb_levels-1))
-					_levels[ii]->bloom = new bbloom( pow(proba_collision,ii+1) * _nelem * bloom_bit_per_elem);
+					_levels[ii]->bloom = new bbloom( pow(_proba_collision,ii+1) * _nelem * bloom_bit_per_elem);
 				else
 					_levels[ii]->bloom  = NULL; // last level has no bloom
 				
@@ -864,6 +882,7 @@ namespace boomphf {
 		template <typename Range>
 		void initLevel0(Range const& input_range)
 		{
+
 			_nb_living =0;
 			//create  threads
 			pthread_t *tab_threads= new pthread_t [_num_thread];
@@ -894,8 +913,9 @@ namespace boomphf {
 		{
 			//clear level before deblooming
 			_bitset->clear(_levels[i]->idx_begin, _levels[i]->hash_domain);
-			_hashidx = _levels[i+1]->idx_begin;
 
+			_hashidx = 0;
+			_idxLevelSetLevel2 =0;
 			_nb_living =0;
 			//create  threads
 			pthread_t *tab_threads= new pthread_t [_num_thread];
@@ -905,6 +925,12 @@ namespace boomphf {
 			t_arg.range = &input_range;
 			t_arg.it =  input_range.begin();
 			t_arg.level = i;
+			
+			if(i >= 2 && _fastmode)
+			{
+				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevel2[0]), static_cast<const elem_t*>( (&setLevel2[0]) +setLevel2.size()));
+				t_arg.it =  data_iterator.begin();
+			}
 			
 			for(int ii=0;ii<_num_thread;ii++)
 			{
@@ -930,7 +956,14 @@ namespace boomphf {
 		int _nb_living;
 		int _num_thread;
 		uint64_t _hashidx;
+		double _proba_collision;
 		
+		uint64_t _lastbitsetrank;
+		uint64_t _idxLevelSetLevel2;
+		
+		bool _fastmode; // fast build mode , requires that 3.5 % elem are loaded in ram
+		std::vector< elem_t > setLevel2; // this set should represent approx  3.5 % of total nb of elements, greatly speed up levels 3 and later
+
 	public:
 		pthread_mutex_t _mutex;
 	};
@@ -953,7 +986,7 @@ namespace boomphf {
 		elem_t * buffer =  (elem_t *)  malloc(NBBUFF*sizeof(elem_t));
 		pthread_mutex_t * mutex =  & obw->_mutex;
 		
-		//get starting iterator for this thread, must be protected (must not be currently used by other thread to copy elems in b uff)
+		//get starting iterator for this thread, must be protected (must not be currently used by other thread to copy elems in buff)
 		pthread_mutex_lock(mutex);
 		it_type *  startit = & targ->it;
 		pthread_mutex_unlock(mutex);

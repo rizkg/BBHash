@@ -86,7 +86,8 @@ int main (int argc, char* argv[])
 	
 	gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 	
-	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,2.5);
+	bool fastmode = true; //build with fast mode, requires a little bit more ram ( 3.5 % of elems  are loaded in ram)
+	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,fastmode,2.5);
 	
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
 
