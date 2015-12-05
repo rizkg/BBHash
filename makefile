@@ -13,7 +13,7 @@ endif
 
 all: $(EXEC)
 
-Bootest:  bootest.cpp
+Bootest:  bootest.cpp BooPHF.h
 	$(CC) -o $@ $^ $(CFLAGS) 
 
 %.o: %.cpp %.h

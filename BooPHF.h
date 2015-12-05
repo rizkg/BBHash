@@ -762,7 +762,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		}
 		
 		template <typename Range,typename Iterator>
-        void pthread_init0(elem_t * buffer, Range const& input_range, Iterator &shared_it)
+        void pthread_init0(elem_t * buffer, Range input_range, Iterator *shared_it)
 		{
 			uint64_t nb_done =0;
 			
@@ -779,12 +779,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				pthread_mutex_lock(&_mutex);
 				
 				//copy n items into buffer
-                for(; inbuff<NBBUFF && shared_it!=until;  ++shared_it /* subtle: if it was sahared++, we would need to implenent operator++(int) for our iterator */)
+                for(; inbuff<NBBUFF && (*shared_it)!=until;  ++(*shared_it) /* subtle: if it was sahared++, we would need to implenent operator++(int) for our iterator */)
 				{
-                    buffer[inbuff]= *shared_it; inbuff++;
+                    buffer[inbuff]= *(*shared_it); inbuff++;
 				}
 				
-                if(shared_it==until) isRunning =false;
+                if((*shared_it)==until) isRunning =false;
 				
 				pthread_mutex_unlock(&_mutex);
 				
@@ -808,11 +808,10 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		}
 	
 		template <typename Range,typename Iterator>
-        void pthread_processLevel(elem_t * buffer, Range const& input_range, Iterator &shared_it, int i)
+        void pthread_processLevel(elem_t * buffer, Range input_range, Iterator *shared_it, int i)
 		{
 			uint64_t nb_done =0;
 			int tid =  __sync_fetch_and_add (&_nb_living, 1);
-			
 			
 			if(i >= 2 && _fastmode)
 			{
@@ -829,11 +828,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				
 				//safely copy n items into buffer
 				pthread_mutex_lock(&_mutex);
-                for(; inbuff<NBBUFF && shared_it!=until;  ++shared_it)
+                for(; inbuff<NBBUFF && (*shared_it)!=until;  ++(*shared_it))
 				{
-                    buffer[inbuff]= *shared_it; inbuff++;
+                    buffer[inbuff]= *(*shared_it); inbuff++;
 				}
-                if(shared_it==until) isRunning =false;
+                if((*shared_it)==until) isRunning =false;
 				pthread_mutex_unlock(&_mutex);
 				
 				
@@ -1075,7 +1074,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 		//get starting iterator for this thread, must be protected (must not be currently used by other thread to copy elems in buff)
 		pthread_mutex_lock(mutex);
-        it_type startit = targ->it;
+        it_type *startit = &targ->it;
 		pthread_mutex_unlock(mutex);
 
 		obw->pthread_init0(buffer, *(targ->range), startit);
@@ -1097,7 +1096,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		pthread_mutex_t * mutex =  & obw->_mutex;
 		
 		pthread_mutex_lock(mutex);
-        it_type startit = targ->it;
+        it_type *startit = &targ->it;
 		pthread_mutex_unlock(mutex);
 		
 		obw->pthread_processLevel(buffer, *(targ->range), startit,level); // i
