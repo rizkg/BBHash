@@ -740,9 +740,14 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			return minimal_hp;
 		}
-		
-		uint64_t totalBitSize()
-		{
+
+        uint64_t nbKeys()
+        {
+            return _nelem;
+        }
+
+        uint64_t totalBitSize()
+        {
 			uint64_t bloomsizes = 0;
 			for (int ii=0; ii< _nb_levels-1; ii++)
 			{
