@@ -14,6 +14,7 @@
 #include <assert.h>
 #include <sys/time.h>
 #include <string.h>
+#include <memory> // for make_shared
 
 
 namespace boomphf {
@@ -649,7 +650,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 	{
 		void * boophf;
 		Range const * range;
-		Iterator  it;
+		std::shared_ptr<void> it_p; /* used to be "Iterator it" but because of fastmode, iterator is polymorphic; TODO: think about whether it should be a unique_ptr actually */
+		std::shared_ptr<void> until_p; /* to cache the "until" variable */
 		int level;
 	};
 	
@@ -740,14 +742,14 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			return minimal_hp;
 		}
-
-        uint64_t nbKeys()
-        {
+		
+		uint64_t nbKeys()
+		{
             return _nelem;
         }
 
-        uint64_t totalBitSize()
-        {
+		uint64_t totalBitSize()
+		{
 			uint64_t bloomsizes = 0;
 			for (int ii=0; ii< _nb_levels-1; ii++)
 			{
@@ -767,13 +769,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		}
 		
 		template <typename Range,typename Iterator>
-        void pthread_init0(elem_t * buffer, Range input_range, Iterator *shared_it)
+        void pthread_init0(elem_t * buffer, Range input_range, std::shared_ptr<Iterator> shared_it, std::shared_ptr<Iterator> until_p)
 		{
 			uint64_t nb_done =0;
 			
 			int tid =  __sync_fetch_and_add (&_nb_living, 1);
 			
-			auto until = input_range.end();
+			auto until = *until_p;
 			
 			
 			uint64_t inbuff =0;
@@ -813,19 +815,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		}
 	
 		template <typename Range,typename Iterator>
-        void pthread_processLevel(elem_t * buffer, Range input_range, Iterator *shared_it, int i)
+        void pthread_processLevel(elem_t * buffer, Range input_range, std::shared_ptr<Iterator> shared_it, std::shared_ptr<Iterator> until_p, int i)
 		{
 			uint64_t nb_done =0;
 			int tid =  __sync_fetch_and_add (&_nb_living, 1);
 			
-			if(i >= 2 && _fastmode)
-			{
-				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevel2[0]), static_cast<const elem_t*>( (&setLevel2[0]) +setLevel2.size()));
-				input_range = data_iterator;
-			}
-			
-			
-			auto until = input_range.end();
+			auto until = *until_p;
 			uint64_t inbuff =0;
 
 			for (bool isRunning=true;  isRunning ; )
@@ -985,7 +980,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			thread_args<Range, it_type> t_arg; // meme arg pour tous
 			t_arg.boophf = this;
 			t_arg.range = &input_range;
-			t_arg.it =  input_range.begin();
+			t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.begin()));
+			t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.end()));
 			
 			for(int ii=0;ii<_num_thread;ii++)
 			{
@@ -1016,18 +1012,27 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			thread_args<Range, it_type> t_arg; // meme arg pour tous
 			t_arg.boophf = this;
 			t_arg.range = &input_range;
-			t_arg.it =  input_range.begin();
+			t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.begin()));
+			t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.end()));
 			t_arg.level = i;
 			
 			if(i >= 2 && _fastmode)
 			{
 				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevel2[0]), static_cast<const elem_t*>( (&setLevel2[0]) +setLevel2.size()));
-				t_arg.it =  data_iterator.begin();
+                typedef decltype(data_iterator.begin()) fastmode_it_type;
+				t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(data_iterator.begin()));
+				t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(data_iterator.end()));
+                
+                /* we'd like to do t_arg.it = data_iterator.begin() but types are different;
+                    so, casting to (void*) because of that; and we remember the type in the template */
+			 
+                for(int ii=0;ii<_num_thread;ii++)
+                    pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, fastmode_it_type>, &t_arg); //&t_arg[ii]
 			}
-			
-			for(int ii=0;ii<_num_thread;ii++)
+			else
 			{
-                pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, it_type>, &t_arg); //&t_arg[ii]
+			    for(int ii=0;ii<_num_thread;ii++)
+                    pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, decltype(input_range.begin())>, &t_arg); //&t_arg[ii]
 			}
 			//joining
 			for(int ii=0;ii<_num_thread;ii++)
@@ -1079,10 +1084,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 		//get starting iterator for this thread, must be protected (must not be currently used by other thread to copy elems in buff)
 		pthread_mutex_lock(mutex);
-        it_type *startit = &targ->it;
+        std::shared_ptr<it_type> startit = std::static_pointer_cast<it_type>(targ->it_p);
+        std::shared_ptr<it_type> until = std::static_pointer_cast<it_type>(targ->until_p);
 		pthread_mutex_unlock(mutex);
 
-		obw->pthread_init0(buffer, *(targ->range), startit);
+		obw->pthread_init0(buffer, *(targ->range), startit, until);
 		
 		free(buffer);
 		return NULL;
@@ -1100,11 +1106,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		elem_t * buffer =  (elem_t *)  malloc(NBBUFF*sizeof(elem_t));
 		pthread_mutex_t * mutex =  & obw->_mutex;
 		
-		pthread_mutex_lock(mutex);
-        it_type *startit = &targ->it;
+		pthread_mutex_lock(mutex); // from comment above: "//get starting iterator for this thread, must be protected (must not be currently used by other thread to copy elems in buff)"
+        std::shared_ptr<it_type> startit = std::static_pointer_cast<it_type>(targ->it_p);
+        std::shared_ptr<it_type> until_p = std::static_pointer_cast<it_type>(targ->until_p);
 		pthread_mutex_unlock(mutex);
 		
-		obw->pthread_processLevel(buffer, *(targ->range), startit,level); // i
+		obw->pthread_processLevel(buffer, *(targ->range), startit, until_p, level); // i
 		
 		free(buffer);
 		return NULL;
