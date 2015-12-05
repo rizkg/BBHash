@@ -208,8 +208,6 @@ namespace boomphf {
 	
 	template <typename Item> class HashFunctors
 	{
-		
-		
 	public:
 		
 		/** Constructor.
@@ -223,7 +221,7 @@ namespace boomphf {
 		}
 		
 		//return one hash
-		uint64_t operator ()  (const Item& key, size_t idx)  {  return hash64 (key, _seed_tab[idx]);  }
+        uint64_t operator ()  (const Item& key, size_t idx)  const {  return hash64 (key, _seed_tab[idx]);  }
 		
 		//this one returns all the 7 hashes
 		//maybe use xorshift instead, for faster hash compute
@@ -277,6 +275,95 @@ namespace boomphf {
 		uint64_t _user_seed;
 	};
 	
+/* alternative hash functor based on xorshift, taking a single hash functor as input.
+we need this 2-functors scheme because HashFunctors won't work with unordered_map.
+(rayan) 
+*/
+
+    // wrapper around HashFunctors to return only one value instead of 7
+    template <typename Item> class SingleHashFunctor 
+    {
+    public:
+        uint64_t operator ()  (const Item& key) const  {  return hashFunctors (key, 0);  }
+
+    private:
+        HashFunctors<Item> hashFunctors;
+    };
+
+    template <typename Item, class SingleHasher_t> class XorshiftHashFunctors
+    {
+        /*  Xorshift128
+            Written in 2014 by Sebastiano Vigna (vigna@acm.org)
+
+            To the extent possible under law, the author has dedicated all copyright
+            and related and neighboring rights to this software to the public domain
+            worldwide. This software is distributed without any warranty.
+
+            See <http://creativecommons.org/publicdomain/zero/1.0/>. */
+        /* This is the fastest generator passing BigCrush without
+           systematic failures, but due to the relatively short period it is
+           acceptable only for applications with a mild amount of parallelism;
+           otherwise, use a xorshift1024* generator.
+           The state must be seeded so that it is not everywhere zero. If you have
+           a nonzero 64-bit seed, we suggest to pass it twice through
+           MurmurHash3's avalanching function. */
+
+        uint64_t s[ 2 ];
+
+        uint64_t next(void) { 
+            uint64_t s1 = s[ 0 ];
+            const uint64_t s0 = s[ 1 ];
+            s[ 0 ] = s0;
+            s1 ^= s1 << 23; // a
+            return ( s[ 1 ] = ( s1 ^ s0 ^ ( s1 >> 17 ) ^ ( s0 >> 26 ) ) ) + s0; // b, c
+        }
+
+        // MurMurhash3 avalanche
+#define BIG_CONSTANT(x) (x##LLU)
+#define FORCE_INLINE inline __attribute__((always_inline))
+        FORCE_INLINE uint64_t fmix64 ( uint64_t k )
+        {
+            k ^= k >> 33;
+            k *= BIG_CONSTANT(0xff51afd7ed558ccd);
+            k ^= k >> 33;
+            k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
+            k ^= k >> 33;
+
+            return k;
+        }
+
+        /** Constructor.
+         * \param[in] nbFct : number of hash functions to be used
+         * \param[in] seed : some initialization code for defining the hash functions. */
+        public:
+        XorshiftHashFunctors ()
+        {
+            _nbFct = 7; // use 7 hash func
+        }
+        
+        //this one returns all the 7 hashes
+        hash_set_t operator ()  (const Item& key)
+        {
+            hash_set_t   hset;
+            
+            hset[0] =  singleHasher (key); 
+            
+            s[0] = hset[0];
+            s[1] = fmix64(fmix64(hset[0])); //more or less, as per xorshift recommendation
+              // repartition looks good with this one. but TODO: try just a xorshift64: http://xorshift.di.unimi.it/xorshift64star.c
+
+            for(size_t ii=1;ii<_nbFct; ii++)
+            {
+                hset[ii] = next();
+            }
+
+            return hset;
+        }
+    private:
+        size_t _nbFct;
+        SingleHasher_t singleHasher;
+    };
+
 	
 ////////////////////////////////////////////////////////////////
 #pragma mark -
@@ -461,7 +548,7 @@ namespace boomphf {
 	//(allows reuse of hashes for other things externally)
 	
 	
-	u_int8_t bit_mask [] = {
+    static u_int8_t bit_mask [] = {
 		0x01,  //00000001
 		0x02,  //00000010
 		0x04,  //00000100
@@ -567,17 +654,19 @@ namespace boomphf {
 	};
 	
 	//forward declaration
-	template <typename elem_t, typename Hasher_t, typename Range>
+    template <typename elem_t, typename Hasher_t, typename Range, typename it_type>
 	void * thread_initLevel0(void * args);
 	
-	template <typename elem_t, typename Hasher_t, typename Range>
+    template <typename elem_t, typename Hasher_t, typename Range, typename it_type>
 	void * thread_processLevel(void * args);
 	
 
-	template <typename elem_t, typename Hasher_t>
+    template <typename elem_t, typename Hasher_t> /* Hasher_t returns a single hash*/
 	class mphf {
 		
-		
+        /* this mechanisms gets 7 hashes (for the Bloom filters) out of Hasher_t */
+        typedef XorshiftHashFunctors<elem_t,Hasher_t> BloomHasher_t ;
+        //typedef HashFunctors<elem_t> BloomHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
 		
 	public:
 		mphf()
@@ -673,7 +762,7 @@ namespace boomphf {
 		}
 		
 		template <typename Range,typename Iterator>
-		void pthread_init0(elem_t * buffer, Range input_range, Iterator * shared_it)
+        void pthread_init0(elem_t * buffer, Range const& input_range, Iterator &shared_it)
 		{
 			uint64_t nb_done =0;
 			
@@ -690,18 +779,18 @@ namespace boomphf {
 				pthread_mutex_lock(&_mutex);
 				
 				//copy n items into buffer
-				for(; inbuff<NBBUFF && (*shared_it)!=until;  (*shared_it)++)
+                for(; inbuff<NBBUFF && shared_it!=until;  ++shared_it /* subtle: if it was sahared++, we would need to implenent operator++(int) for our iterator */)
 				{
-					buffer[inbuff]= *(*shared_it); inbuff++;
+                    buffer[inbuff]= *shared_it; inbuff++;
 				}
 				
-				if((*shared_it)==until) isRunning =false;
+                if(shared_it==until) isRunning =false;
 				
 				pthread_mutex_unlock(&_mutex);
 				
 				
 				//do work on the n elems of the buffer
-				for(int ii=0; ii<inbuff ; ii++)
+                for(uint64_t ii=0; ii<inbuff ; ii++)
 				{
 					elem_t val = buffer[ii];
 					
@@ -719,7 +808,7 @@ namespace boomphf {
 		}
 	
 		template <typename Range,typename Iterator>
-		void pthread_processLevel(elem_t * buffer, Range input_range, Iterator * shared_it, int i)
+        void pthread_processLevel(elem_t * buffer, Range const& input_range, Iterator &shared_it, int i)
 		{
 			uint64_t nb_done =0;
 			int tid =  __sync_fetch_and_add (&_nb_living, 1);
@@ -740,16 +829,16 @@ namespace boomphf {
 				
 				//safely copy n items into buffer
 				pthread_mutex_lock(&_mutex);
-				for(; inbuff<NBBUFF && (*shared_it)!=until;  (*shared_it)++)
+                for(; inbuff<NBBUFF && shared_it!=until;  ++shared_it)
 				{
-					buffer[inbuff]= *(*shared_it); inbuff++;
+                    buffer[inbuff]= *shared_it; inbuff++;
 				}
-				if((*shared_it)==until) isRunning =false;
+                if(shared_it==until) isRunning =false;
 				pthread_mutex_unlock(&_mutex);
 				
 				
 				//do work on the n elems of the buffer
-				for(int ii=0; ii<inbuff ; ii++)
+                for(uint64_t ii=0; ii<inbuff ; ii++)
 				{
 					elem_t val = buffer[ii];
 					
@@ -896,7 +985,7 @@ namespace boomphf {
 			
 			for(int ii=0;ii<_num_thread;ii++)
 			{
-				pthread_create (&tab_threads[ii], NULL,  thread_initLevel0<elem_t, Hasher_t, Range>, &t_arg); //&t_arg[ii]
+                pthread_create (&tab_threads[ii], NULL,  thread_initLevel0<elem_t, Hasher_t, Range, it_type>, &t_arg); //&t_arg[ii]
 			}
 			
 			//joining
@@ -934,7 +1023,7 @@ namespace boomphf {
 			
 			for(int ii=0;ii<_num_thread;ii++)
 			{
-				pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range>, &t_arg); //&t_arg[ii]
+                pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, it_type>, &t_arg); //&t_arg[ii]
 			}
 			//joining
 			for(int ii=0;ii<_num_thread;ii++)
@@ -946,12 +1035,12 @@ namespace boomphf {
 	private:
 		level ** _levels;
 		int _nb_levels;
-		Hasher_t _hasher;
+        BloomHasher_t _hasher;
 		bitVector * _bitset;
 		double _gamma;
 		uint64_t _hash_domain;
 		uint64_t _nelem;
-		std::unordered_map<elem_t,uint64_t> _final_hash;
+        std::unordered_map<elem_t,uint64_t,Hasher_t> _final_hash;
 		Progress _progressBar;
 		int _nb_living;
 		int _num_thread;
@@ -974,12 +1063,10 @@ namespace boomphf {
 ////////////////////////////////////////////////////////////////
 	
 	//bon sang de template
-	template <typename elem_t, typename Hasher_t, typename Range>
+    template <typename elem_t, typename Hasher_t, typename Range, typename it_type>
 	void * thread_initLevel0(void * args)
 	{
 		if(args ==NULL) return NULL;
-		
-		typedef decltype(((Range*)nullptr)->begin()) it_type; // hmmm I hate this, I dont know how to avoid the template type nightmare
 		
 		thread_args<Range,it_type> *targ = (thread_args<Range,it_type>*) args;
 		mphf<elem_t, Hasher_t>  * obw = (mphf<elem_t, Hasher_t > *) targ->boophf;
@@ -988,7 +1075,7 @@ namespace boomphf {
 		
 		//get starting iterator for this thread, must be protected (must not be currently used by other thread to copy elems in buff)
 		pthread_mutex_lock(mutex);
-		it_type *  startit = & targ->it;
+        it_type startit = targ->it;
 		pthread_mutex_unlock(mutex);
 
 		obw->pthread_init0(buffer, *(targ->range), startit);
@@ -997,12 +1084,11 @@ namespace boomphf {
 		return NULL;
 	}
 	
-	template <typename elem_t, typename Hasher_t, typename Range>
+    template <typename elem_t, typename Hasher_t, typename Range, typename it_type>
 	void * thread_processLevel(void * args)
 	{
 		if(args ==NULL) return NULL;
 		
-		typedef decltype(((Range*)nullptr)->begin()) it_type;
 		thread_args<Range,it_type> *targ = (thread_args<Range,it_type>*) args;
 		
 		mphf<elem_t, Hasher_t>  * obw = (mphf<elem_t, Hasher_t > *) targ->boophf;
@@ -1011,7 +1097,7 @@ namespace boomphf {
 		pthread_mutex_t * mutex =  & obw->_mutex;
 		
 		pthread_mutex_lock(mutex);
-		it_type *  startit = & targ->it;
+        it_type startit = targ->it;
 		pthread_mutex_unlock(mutex);
 		
 		obw->pthread_processLevel(buffer, *(targ->range), startit,level); // i
