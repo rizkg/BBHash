@@ -293,53 +293,37 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
     template <typename Item, class SingleHasher_t> class XorshiftHashFunctors
     {
-        /*  Xorshift128
-            Written in 2014 by Sebastiano Vigna (vigna@acm.org)
+        /* 
+         *  Xorshift64*
+         *
+         *  Written in 2014 by Sebastiano Vigna (vigna@acm.org)
+         *
+         *  To the extent possible under law, the author has dedicated all copyright
+         *  and related and neighboring rights to this software to the public domain
+         *  worldwide. This software is distributed without any warranty.
+         *
+         *  See <http://creativecommons.org/publicdomain/zero/1.0/>. */
 
-            To the extent possible under law, the author has dedicated all copyright
-            and related and neighboring rights to this software to the public domain
-            worldwide. This software is distributed without any warranty.
+        /* This is a fast, good generator if you're short on memory, but otherwise
+         *    we rather suggest to use a xorshift128+ or xorshift1024* (for a very
+         *       long period) generator. */
 
-            See <http://creativecommons.org/publicdomain/zero/1.0/>. */
-        /* This is the fastest generator passing BigCrush without
-           systematic failures, but due to the relatively short period it is
-           acceptable only for applications with a mild amount of parallelism;
-           otherwise, use a xorshift1024* generator.
-           The state must be seeded so that it is not everywhere zero. If you have
-           a nonzero 64-bit seed, we suggest to pass it twice through
-           MurmurHash3's avalanching function. */
+        uint64_t x; /* The state must be seeded with a nonzero value. */
 
-        uint64_t s[ 2 ];
-
-        uint64_t next(void) { 
-            uint64_t s1 = s[ 0 ];
-            const uint64_t s0 = s[ 1 ];
-            s[ 0 ] = s0;
-            s1 ^= s1 << 23; // a
-            return ( s[ 1 ] = ( s1 ^ s0 ^ ( s1 >> 17 ) ^ ( s0 >> 26 ) ) ) + s0; // b, c
-        }
-
-        // MurMurhash3 avalanche
-#define BIG_CONSTANT(x) (x##LLU)
-#define FORCE_INLINE inline __attribute__((always_inline))
-        FORCE_INLINE uint64_t fmix64 ( uint64_t k )
-        {
-            k ^= k >> 33;
-            k *= BIG_CONSTANT(0xff51afd7ed558ccd);
-            k ^= k >> 33;
-            k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
-            k ^= k >> 33;
-
-            return k;
+        inline uint64_t next() {
+            x ^= x >> 12; // a
+            x ^= x << 25; // b
+            x ^= x >> 27; // c
+            return x * 2685821657736338717LL;
         }
 
         /** Constructor.
          * \param[in] nbFct : number of hash functions to be used
          * \param[in] seed : some initialization code for defining the hash functions. */
         public:
-        XorshiftHashFunctors ()
+        XorshiftHashFunctors () 
         {
-            _nbFct = 7; // use 7 hash func
+            
         }
         
         //this one returns all the 7 hashes
@@ -349,11 +333,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
             
             hset[0] =  singleHasher (key); 
             
-            s[0] = hset[0];
-            s[1] = fmix64(fmix64(hset[0])); //more or less, as per xorshift recommendation
-              // repartition looks good with this one. but TODO: try just a xorshift64: http://xorshift.di.unimi.it/xorshift64star.c
+            x = hset[0];
 
-            for(size_t ii=1;ii<_nbFct; ii++)
+            for(size_t ii=1;ii< 7 /* it's much better have a constant here, for inlining; this loop is super performance critical*/; ii++)
             {
                 hset[ii] = next();
             }
@@ -361,7 +343,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
             return hset;
         }
     private:
-        size_t _nbFct;
         SingleHasher_t singleHasher;
     };
 
