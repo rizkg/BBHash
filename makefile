@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS = -O3 -std=c++11
+CFLAGS = -O3 -std=c++11 -lpthread
 EXEC=Bootest
 all: $(EXEC)
 
@@ -13,7 +13,7 @@ endif
 
 all: $(EXEC)
 
-Bootest:  bootest.cpp
+Bootest:  bootest.cpp BooPHF.h
 	$(CC) -o $@ $^ $(CFLAGS) 
 
 %.o: %.cpp %.h

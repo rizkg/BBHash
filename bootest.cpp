@@ -28,7 +28,7 @@ uint64_t random64 ()
 
 
 
-typedef boomphf::HashFunctors<u_int64_t>  hasher_t;
+typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
 
 
@@ -164,4 +164,5 @@ int main (int argc, char* argv[])
 	free(data);
 	return EXIT_SUCCESS;
 }
+
 
