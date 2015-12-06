@@ -41,7 +41,7 @@ namespace boomphf {
 	{
 		
 		unsigned int low = x & 0xffffffff ;
-		unsigned int high = ( x >> 32) & 0xffffffff ;
+		unsigned int high = ( x >> 32LL) & 0xffffffff ;
 		
 		return (popcount_32(low) + popcount_32(high));
 	}
@@ -389,7 +389,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 		bitVector(uint64_t n) : _size(n)
 		{
-			_nchar  = (1+n/64LL);
+			_nchar  = (1ULL+n/64ULL);
 			_bitArray = (uint64_t *) calloc (_nchar,sizeof(uint64_t));
 		}
 		
@@ -401,7 +401,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		void resize(uint64_t newsize)
 		{
 			//printf("bitvector resize from  %llu bits to %llu \n",_size,newsize);
-			_nchar  = (1+newsize/64LL);
+			_nchar  = (1ULL+newsize/64ULL);
 			_bitArray = (uint64_t *) realloc(_bitArray,_nchar*sizeof(uint64_t));
 			_size = newsize;
 		}
@@ -411,7 +411,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			return _size;
 		}
 		
-		uint64_t bitSize() const {return (_nchar*64LL + _ranks.capacity()*64 );}
+		uint64_t bitSize() const {return (_nchar*64ULL + _ranks.capacity()*64ULL );}
 		
 		//clear whole array
 		void clear()
@@ -424,7 +424,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		{
 			assert( (start & 63) ==0);
 			assert( (size & 63) ==0);
-			memset(_bitArray + (start/64),0,(size/64)*sizeof(uint64_t));
+			memset(_bitArray + (start/64ULL),0,(size/64ULL)*sizeof(uint64_t));
 		}
 		
 		//for debug purposes
@@ -451,7 +451,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		//return value at pos
 		uint64_t operator[](uint64_t pos) const
 		{
-			return (_bitArray[pos >> 6] >> (pos & 63 ) ) & 1;
+			return (_bitArray[pos >> 6ULL] >> (pos & 63 ) ) & 1;
 		}
 		
 		//atomically   return old val and set to 1
@@ -468,7 +468,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		{
 			assert(pos<_size);
 			//_bitArray [pos >> 6] |=   (1ULL << (pos & 63) ) ;
-			__sync_fetch_and_or (_bitArray + (pos >> 6), (1ULL << (pos & 63)) );
+			__sync_fetch_and_or (_bitArray + (pos >> 6ULL), (1ULL << (pos & 63)) );
 
 		}
 		
@@ -476,7 +476,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		void reset(uint64_t pos)
 		{
 			//_bitArray [pos >> 6] &=   ~(1ULL << (pos & 63) ) ;
-			__sync_fetch_and_and (_bitArray + (pos >> 6), ~(1ULL << (pos & 63) ));
+			__sync_fetch_and_and (_bitArray + (pos >> 6ULL), ~(1ULL << (pos & 63) ));
 
 		}
 		
@@ -496,7 +496,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 		uint64_t rank(uint64_t pos) const
 		{
-			uint64_t word_idx = pos / 64;
+			uint64_t word_idx = pos / 64ULL;
 			uint64_t word_offset = pos % 64;
 			uint64_t block = pos / _nb_bits_per_rank_sample;
 			uint64_t r = _ranks[block];
@@ -550,12 +550,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		bbloom (uint64_t tai_bloom, size_t nbHash = 7, size_t block_nbits = 12)
 		:  _n_hash_func(nbHash), _blooma(0), _tai(tai_bloom+2*(1<<block_nbits)), _nchar(0), _nbits_BlockSize(block_nbits)
 		{
-			_nchar  = (1+_tai/8LL);
+			_nchar  = (1ULL+_tai/8ULL);
 			_blooma = (unsigned char *) malloc (_nchar*sizeof(unsigned char));
 			memset (_blooma, 0, _nchar*sizeof(unsigned char));
 			
-			_mask_block = (1<<_nbits_BlockSize) - 1;
-			_reduced_tai = _tai -  2*(1<<_nbits_BlockSize) ;//2* for neighbor coherent
+			_mask_block = (1ULL<<_nbits_BlockSize) - 1ULL;
+			_reduced_tai = _tai -  2ULL*(1ULL<<_nbits_BlockSize) ;//2* for neighbor coherent
 		}
 		virtual ~bbloom ()  { free (_blooma); }
 		
@@ -566,12 +566,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		{
 			uint64_t h0 =  hashes[0] % _reduced_tai;
 			
-			if ((_blooma[h0 >> 3 ] & bit_mask[h0 & 7]) == 0 )  {  return false;  }
+			if ((_blooma[h0 >> 3ULL ] & bit_mask[h0 & 7]) == 0 )  {  return false;  }
 			
 			for (size_t i=1; i<_n_hash_func; i++)
 			{
 				uint64_t h1 = h0  + (hashes[i] & _mask_block ) ;
-				if ((_blooma[h1 >> 3 ] & bit_mask[h1 & 7]) == 0)  {  return false;  }
+				if ((_blooma[h1 >> 3ULL ] & bit_mask[h1 & 7]) == 0)  {  return false;  }
 			}
 			return true;
 		}
@@ -579,12 +579,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		void insert (hash_set_t & hashes)
 		{
 			uint64_t h0 = hashes[0] % _reduced_tai;
-			__sync_fetch_and_or (_blooma + (h0 >> 3), bit_mask[h0 & 7]);
+			__sync_fetch_and_or (_blooma + (h0 >> 3ULL), bit_mask[h0 & 7]);
 			
 			for (size_t i=1; i< _n_hash_func; i++)
 			{
 				uint64_t h1 = h0  + (hashes[i] & _mask_block )   ;
-				__sync_fetch_and_or (_blooma + (h1 >> 3), bit_mask[h1 & 7]);
+				__sync_fetch_and_or (_blooma + (h1 >> 3ULL), bit_mask[h1 & 7]);
 			}
 		}
 		
@@ -694,7 +694,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			_lastbitsetrank = _bitset->rank( _bitset->size() -1);
 			
-			//printf("used temp ram for construction : %lli MB \n",setLevel2.capacity()* sizeof(elem_t) /1024LL/1024LL);
+			//printf("used temp ram for construction : %lli MB \n",setLevel2.capacity()* sizeof(elem_t) /1024ULL/1024ULL);
 			
 			std::vector<elem_t>().swap(setLevel2);   // clear setLevel2 reallocating
 			
