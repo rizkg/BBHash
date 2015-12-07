@@ -648,8 +648,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 	class mphf {
 		
         /* this mechanisms gets 7 hashes (for the Bloom filters) out of Hasher_t */
-        typedef XorshiftHashFunctors<elem_t,Hasher_t> BloomHasher_t ;
-        //typedef HashFunctors<elem_t> BloomHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
+        //typedef XorshiftHashFunctors<elem_t,Hasher_t> BloomHasher_t ;
+        typedef HashFunctors<elem_t> BloomHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
 		
 	public:
 		mphf()
