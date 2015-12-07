@@ -283,13 +283,25 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
     // wrapper around HashFunctors to return only one value instead of 7
     template <typename Item> class SingleHashFunctor 
-    {
-    public:
-        uint64_t operator ()  (const Item& key) const  {  return hashFunctors (key, 0);  }
-
-    private:
-        HashFunctors<Item> hashFunctors;
-    };
+	{
+	public:
+		uint64_t operator ()  (const Item& key) const  {  return hashFunctors (key, 0);  }
+		
+		hash_set_t operator []  (const Item& key) const
+		{
+			hash_set_t	 hset;
+			
+			for(size_t ii=0;ii<7; ii++)
+			{
+				hset[ii] =  hashFunctors (key, ii);
+			}
+			return hset;
+		}
+		
+	private:
+		HashFunctors<Item> hashFunctors;
+		
+	};
 
     template <typename Item, class SingleHasher_t> class XorshiftHashFunctors
     {
@@ -649,7 +661,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
         /* this mechanisms gets 7 hashes (for the Bloom filters) out of Hasher_t */
         //typedef XorshiftHashFunctors<elem_t,Hasher_t> BloomHasher_t ;
-        typedef HashFunctors<elem_t> BloomHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
+        //typedef HashFunctors<elem_t> BloomHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
+		typedef Hasher_t BloomHasher_t;
 		
 	public:
 		mphf()
@@ -703,7 +716,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 		uint64_t lookup(elem_t elem)
 		{
-			auto hashes = _hasher(elem);
+			auto hashes = _hasher[elem];
 			uint64_t non_minimal_hp,minimal_hp;
 			
 			int level =  getLevel(hashes);
@@ -736,7 +749,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			{
 				bloomsizes+= _levels[ii]->bloom->bitSize();
 			}
-			uint64_t totalsize = _bitset->bitSize() + bloomsizes + _final_hash.size()*42*8 ;  // unordered map takes approx 42B per elem [personal test]
+			uint64_t totalsize = _bitset->bitSize() + bloomsizes + _final_hash.size()*42*8 ;  // unordered map takes approx 42B per elem [personal test] (42B with uint64_t key, would be larger for other type of elem)
 			
 			
 			printf("Bitarray    %12llu  bits (%.2f %%)   (array + ranks )\n",
@@ -782,7 +795,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				{
 					elem_t val = buffer[ii];
 					
-					auto hashes = _hasher(val);
+					auto hashes = _hasher[val];
 					
 					insertIntoLevel(hashes,0);
 					
@@ -822,7 +835,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				{
 					elem_t val = buffer[ii];
 					
-					auto hashes = _hasher(val);
+					auto hashes = _hasher[val];
 					int level = getLevel(hashes, i+1); //should be safe
 					
 					if(level == i+1)
