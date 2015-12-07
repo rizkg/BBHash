@@ -294,6 +294,49 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 	};
 
+	
+	
+	// the SingleHasher_t must have  operator()(elem_t key, uint64_t seed)
+	//this class simply generates a list of seeds
+	template <typename Item, class SingleHasher_t> class IndepHashFunctors
+	{
+		
+	public:
+
+		IndepHashFunctors ()
+		{
+			generate_hash_seed ();
+		}
+		hash_set_t operator ()  (const Item& key)
+		{
+			hash_set_t	 hset;
+			
+			for(size_t ii=0;ii<7; ii++)
+			{
+				hset[ii] =  singleHasher (key, _seed_tab[ii]);
+			}
+			return hset;
+		}
+		
+	private:
+		void generate_hash_seed ()
+		{
+			static const uint64_t rbase[MAXNBFUNC] =
+			{
+				0xAAAAAAAA55555555ULL,  0x33333333CCCCCCCCULL,  0x6666666699999999ULL,  0xB5B5B5B54B4B4B4BULL,
+				0xAA55AA5555335533ULL,  0x33CC33CCCC66CC66ULL,  0x6699669999B599B5ULL,  0xB54BB54B4BAA4BAAULL,
+				0xAA33AA3355CC55CCULL,  0x33663366CC99CC99ULL
+			};
+			
+			for (size_t i=0; i<MAXNBFUNC; ++i)  {  _seed_tab[i] = rbase[i];  }
+			for (size_t i=0; i<MAXNBFUNC; ++i)  {  _seed_tab[i] = _seed_tab[i] * _seed_tab[(i+3) % MAXNBFUNC]  ;  }
+		}
+		
+		static const size_t MAXNBFUNC = 10;
+		uint64_t _seed_tab[MAXNBFUNC];
+		SingleHasher_t singleHasher;
+	};
+	
     template <typename Item, class SingleHasher_t> class XorshiftHashFunctors
     {
         /*  Xorshift128*
@@ -650,8 +693,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 	class mphf {
 		
         /* this mechanisms gets 7 hashes (for the Bloom filters) out of Hasher_t */
-        typedef XorshiftHashFunctors<elem_t,Hasher_t> MultiHasher_t ;
-        //typedef HashFunctors<elem_t> MultiHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
+       // typedef XorshiftHashFunctors<elem_t,Hasher_t> MultiHasher_t ;
+       // typedef HashFunctors<elem_t> MultiHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
+		typedef IndepHashFunctors<elem_t,Hasher_t> MultiHasher_t; //faster than xorshift
 		
 	public:
 		mphf()
