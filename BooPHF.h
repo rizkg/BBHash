@@ -223,6 +223,8 @@ namespace boomphf {
 		
 		//return one hash
         uint64_t operator ()  (const Item& key, size_t idx)  const {  return hash64 (key, _seed_tab[idx]);  }
+       
+        uint64_t hashWithSeed(const Item& key, uint64_t seed)  const {  return hash64 (key, seed);  }
 		
 		//this one returns all the 7 hashes
 		//maybe use xorshift instead, for faster hash compute
@@ -285,18 +287,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
     template <typename Item> class SingleHashFunctor 
 	{
 	public:
-		uint64_t operator ()  (const Item& key) const  {  return hashFunctors (key, 0);  }
-		
-		hash_set_t operator []  (const Item& key) const
-		{
-			hash_set_t	 hset;
-			
-			for(size_t ii=0;ii<7; ii++)
-			{
-				hset[ii] =  hashFunctors (key, ii);
-			}
-			return hset;
-		}
+		uint64_t operator ()  (const Item& key, uint64_t seed=0xAAAAAAAA55555555ULL) const  {  return hashFunctors.hashWithSeed(key, seed);  }
 		
 	private:
 		HashFunctors<Item> hashFunctors;
@@ -305,49 +296,46 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
     template <typename Item, class SingleHasher_t> class XorshiftHashFunctors
     {
-        /* 
-         *  Xorshift64*
-         *
-         *  Written in 2014 by Sebastiano Vigna (vigna@acm.org)
-         *
-         *  To the extent possible under law, the author has dedicated all copyright
-         *  and related and neighboring rights to this software to the public domain
-         *  worldwide. This software is distributed without any warranty.
-         *
-         *  See <http://creativecommons.org/publicdomain/zero/1.0/>. */
+        /*  Xorshift128*
+            Written in 2014 by Sebastiano Vigna (vigna@acm.org)
 
-        /* This is a fast, good generator if you're short on memory, but otherwise
-         *    we rather suggest to use a xorshift128+ or xorshift1024* (for a very
-         *       long period) generator. */
+            To the extent possible under law, the author has dedicated all copyright
+            and related and neighboring rights to this software to the public domain
+            worldwide. This software is distributed without any warranty.
 
-        uint64_t x; /* The state must be seeded with a nonzero value. */
+            See <http://creativecommons.org/publicdomain/zero/1.0/>. */
+        /* This is the fastest generator passing BigCrush without
+           systematic failures, but due to the relatively short period it is
+           acceptable only for applications with a mild amount of parallelism;
+           otherwise, use a xorshift1024* generator.
 
-        inline uint64_t next() {
-            x ^= x >> 12; // a
-            x ^= x << 25; // b
-            x ^= x >> 27; // c
-            return x * 2685821657736338717LL;
+           The state must be seeded so that it is not everywhere zero. If you have
+           a nonzero 64-bit seed, we suggest to pass it twice through
+           MurmurHash3's avalanching function. */
+
+        uint64_t s[ 2 ];
+
+        uint64_t next(void) { 
+            uint64_t s1 = s[ 0 ];
+            const uint64_t s0 = s[ 1 ];
+            s[ 0 ] = s0;
+            s1 ^= s1 << 23; // a
+            return ( s[ 1 ] = ( s1 ^ s0 ^ ( s1 >> 17 ) ^ ( s0 >> 26 ) ) ) + s0; // b, c
         }
 
-        /** Constructor.
-         * \param[in] nbFct : number of hash functions to be used
-         * \param[in] seed : some initialization code for defining the hash functions. */
         public:
-        XorshiftHashFunctors () 
-        {
-            
-        }
-        
         //this one returns all the 7 hashes
         hash_set_t operator ()  (const Item& key)
         {
             hash_set_t   hset;
             
-            hset[0] =  singleHasher (key); 
+            hset[0] =  singleHasher (key, 0xAAAAAAAA55555555ULL); 
+            hset[1] =  singleHasher (key, 0x33333333CCCCCCCCULL); 
             
-            x = hset[0];
+            s[0] = hset[0];
+            s[1] = hset[1];
 
-            for(size_t ii=1;ii< 7 /* it's much better have a constant here, for inlining; this loop is super performance critical*/; ii++)
+            for(size_t ii=2;ii< 7 /* it's much better have a constant here, for inlining; this loop is super performance critical*/; ii++)
             {
                 hset[ii] = next();
             }
@@ -656,13 +644,14 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 	void * thread_processLevel(void * args);
 	
 
-    template <typename elem_t, typename Hasher_t> /* Hasher_t returns a single hash*/
+    /* Hasher_t returns a single hash when operator()(elem_t key) is called.
+       if used with XorshiftHashFunctors, it must have the following operator: operator()(elem_t key, uint64_t seed) */
+    template <typename elem_t, typename Hasher_t>
 	class mphf {
 		
         /* this mechanisms gets 7 hashes (for the Bloom filters) out of Hasher_t */
-        //typedef XorshiftHashFunctors<elem_t,Hasher_t> BloomHasher_t ;
-        //typedef HashFunctors<elem_t> BloomHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
-		typedef Hasher_t BloomHasher_t;
+        typedef XorshiftHashFunctors<elem_t,Hasher_t> MultiHasher_t ;
+        //typedef HashFunctors<elem_t> MultiHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
 		
 	public:
 		mphf()
@@ -716,7 +705,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 		uint64_t lookup(elem_t elem)
 		{
-			auto hashes = _hasher[elem];
+			auto hashes = _hasher(elem);
 			uint64_t non_minimal_hp,minimal_hp;
 			
 			int level =  getLevel(hashes);
@@ -795,7 +784,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				{
 					elem_t val = buffer[ii];
 					
-					auto hashes = _hasher[val];
+					auto hashes = _hasher(val);
 					
 					insertIntoLevel(hashes,0);
 					
@@ -835,7 +824,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				{
 					elem_t val = buffer[ii];
 					
-					auto hashes = _hasher[val];
+					auto hashes = _hasher(val);
 					int level = getLevel(hashes, i+1); //should be safe
 					
 					if(level == i+1)
@@ -1038,7 +1027,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 	private:
 		level ** _levels;
 		int _nb_levels;
-        BloomHasher_t _hasher;
+        MultiHasher_t _hasher;
 		bitVector * _bitset;
 		double _gamma;
 		uint64_t _hash_domain;
