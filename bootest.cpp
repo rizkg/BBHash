@@ -6,7 +6,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <random>
-
+#include <algorithm> 
 
 u_int64_t *data;
 
@@ -62,19 +62,36 @@ int main (int argc, char* argv[])
 	printf("Construct a BooPHF with  %lli elements (%lli MB for holding elems in ram) \n",nelem,nelem*sizeof(u_int64_t)/1024LL/1024LL);
 	
 	
-	
 	//creating some random input data
 	//	srandomdev(); //init random generator
 	//	data = (u_int64_t * ) calloc(nelem,sizeof(u_int64_t));
 	//	for (u_int64_t i = 0; i < nelem; i++)
 	//		data[i] = random64();
 	
+	uint64_t rab = 100;
 	
 	static std::mt19937_64 rng;
 	rng.seed(std::mt19937_64::default_seed);
-	data = (u_int64_t * ) calloc(nelem,sizeof(u_int64_t));
-	for (u_int64_t i = 1; i < nelem; i++)
+	data = (u_int64_t * ) calloc(nelem+rab,sizeof(u_int64_t));
+	for (u_int64_t i = 1; i < nelem+rab; i++)
 		data[i] = rng();
+	
+	
+	
+	uint64_t ii, jj;
+	printf("de-duplicating items \n");
+	
+	std::sort(data,data+nelem+rab);
+
+	for (ii = 1, jj = 0; ii < nelem+rab; ii++) {
+		if (data[ii] != data[jj])
+			data[++jj] = data[ii];
+	}
+
+	printf("found %lli duplicated items  \n",nelem+rab-(jj + 1) );
+
+	
+	
 	
 	///create the boophf
 	
@@ -107,6 +124,8 @@ int main (int argc, char* argv[])
 		u_int64_t nb_collision_detected = 0;
 		u_int64_t range_problems = 0;
 		char * check_table = (char * ) calloc(nelem,sizeof(char));
+		
+		
 		for (u_int64_t i = 0; i < nelem; i++)
 		{
 			mphf_value = bphf->lookup(data[i]);
