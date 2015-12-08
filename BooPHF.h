@@ -356,9 +356,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
            a nonzero 64-bit seed, we suggest to pass it twice through
            MurmurHash3's avalanching function. */
 
-        uint64_t s[ 2 ];
+      //  uint64_t s[ 2 ];
 
-        uint64_t next(void) { 
+        uint64_t next(uint64_t * s) {
             uint64_t s1 = s[ 0 ];
             const uint64_t s0 = s[ 1 ];
             s[ 0 ] = s0;
@@ -370,6 +370,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
         //this one returns all the 7 hashes
         hash_set_t operator ()  (const Item& key)
         {
+			uint64_t s[ 2 ];
+
             hash_set_t   hset;
             
             hset[0] =  singleHasher (key, 0xAAAAAAAA55555555ULL); 
@@ -380,7 +382,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
             for(size_t ii=2;ii< 7 /* it's much better have a constant here, for inlining; this loop is super performance critical*/; ii++)
             {
-                hset[ii] = next();
+                hset[ii] = next(s);
             }
 
             return hset;
@@ -693,9 +695,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 	class mphf {
 		
         /* this mechanisms gets 7 hashes (for the Bloom filters) out of Hasher_t */
-       // typedef XorshiftHashFunctors<elem_t,Hasher_t> MultiHasher_t ;
+        typedef XorshiftHashFunctors<elem_t,Hasher_t> MultiHasher_t ;
        // typedef HashFunctors<elem_t> MultiHasher_t; // original code (but only works for int64 keys)  (seems to be as fast as the current xorshift)
-		typedef IndepHashFunctors<elem_t,Hasher_t> MultiHasher_t; //faster than xorshift
+		//typedef IndepHashFunctors<elem_t,Hasher_t> MultiHasher_t; //faster than xorshift
 		
 	public:
 		mphf()
