@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <random>
 #include <algorithm> 
-
+#include <climits>
 u_int64_t *data;
 
 //uncomment to check correctness of the func
@@ -69,15 +69,25 @@ int main (int argc, char* argv[])
 	//		data[i] = random64();
 	
 	uint64_t rab = 100;
-	
+//	
 	static std::mt19937_64 rng;
 	rng.seed(std::mt19937_64::default_seed);
 	data = (u_int64_t * ) calloc(nelem+rab,sizeof(u_int64_t));
+
 	for (u_int64_t i = 1; i < nelem+rab; i++)
 		data[i] = rng();
+//	
 	
 	
 	
+	//methode simple pas besoin de dup
+//	data = (u_int64_t * ) calloc(nelem,sizeof(u_int64_t));
+//		data[0] = 0;
+//		u_int64_t step = ULLONG_MAX / nelem;
+//			for (u_int64_t i = 1; i < nelem; i++)
+//				data[i] = data[i-1] +step;
+	
+//	
 	uint64_t ii, jj;
 	printf("de-duplicating items \n");
 	
@@ -93,6 +103,9 @@ int main (int argc, char* argv[])
 	
 	
 	
+	
+
+	
 	///create the boophf
 	
 	auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
@@ -103,8 +116,8 @@ int main (int argc, char* argv[])
 	
 	gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 	
-	bool fastmode = true; //build with fast mode, requires a little bit more ram ( 3.5 % of elems  are loaded in ram)
-	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,fastmode,2.5);
+	bool fastmode = true; //build with fast mode, requires a little bit more ram ( 3 % of elems  are loaded in ram)
+	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,fastmode,2.0);
 	
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
 
