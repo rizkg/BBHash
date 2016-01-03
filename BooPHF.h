@@ -566,6 +566,26 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			return r;
 		}
 		
+		
+		void save(std::ostream& os) const
+		{
+			os.write(reinterpret_cast<char const*>(&_size), sizeof(_size));
+			os.write(reinterpret_cast<char const*>(&_nchar), sizeof(_nchar));
+			os.write(reinterpret_cast<char const*>(_bitArray), (std::streamsize)(sizeof(uint64_t) * _nchar));
+			assert(_ranks.size() == (_size + _nb_bits_per_rank_sample - 1) / _nb_bits_per_rank_sample);
+		//	os.write(reinterpret_cast<char const*>(_ranks.data()), (std::streamsize)(sizeof(_ranks[0]) * _ranks.size()));
+		}
+		
+		void load(std::istream& is)
+		{
+			is.read(reinterpret_cast<char*>(&_size), sizeof(_size));
+			is.read(reinterpret_cast<char*>(&_nchar), sizeof(_nchar));
+			this->resize(_size);
+			_ranks.resize((_size + _nb_bits_per_rank_sample - 1) / _nb_bits_per_rank_sample);
+			//is.read(reinterpret_cast<char*>(_ranks.data()), (std::streamsize)(sizeof(_ranks[0]) * _ranks.size()));
+		}
+		
+		
 	protected:
 		uint64_t* _bitArray;
 		uint64_t _size;
@@ -899,6 +919,32 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 		}
 		
+		
+		void save(std::ostream& os) const
+		{
+			os.write(reinterpret_cast<char const*>(&_gamma), sizeof(_gamma));
+			os.write(reinterpret_cast<char const*>(&_nb_levels), sizeof(_nb_levels));
+			os.write(reinterpret_cast<char const*>(&_lastbitsetrank), sizeof(_lastbitsetrank));
+			os.write(reinterpret_cast<char const*>(&_nelem), sizeof(_nelem));
+			_bitset->save(os);
+			
+			//todo save final hash
+
+		}
+		
+		void load(std::istream& is)
+		{
+			is.read(reinterpret_cast<char*>(&_gamma), sizeof(_gamma));
+			is.read(reinterpret_cast<char*>(&_nb_levels), sizeof(_nb_levels));
+			is.read(reinterpret_cast<char*>(&_lastbitsetrank), sizeof(_lastbitsetrank));
+			is.read(reinterpret_cast<char*>(&_nelem), sizeof(_nelem));
+
+			
+			_bitset->load(is);
+
+		}
+		
+		
 		private :
 		
 		void setup()
@@ -929,7 +975,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				
 				_levels[ii]->idx_begin = previous_idx;
 				
-				// round size to nearet superior multiple of 64, makes it easier to clear a level
+				// round size to nearest superior multiple of 64, makes it easier to clear a level
 				_levels[ii]->hash_domain =  (( (uint64_t) (_hash_domain * pow(_proba_collision,ii)) + 63) / 64 ) * 64;
 				if(_levels[ii]->hash_domain == 0 ) _levels[ii]->hash_domain  = 64 ;
 				previous_idx += _levels[ii]->hash_domain;

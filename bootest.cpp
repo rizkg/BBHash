@@ -8,6 +8,8 @@
 #include <random>
 #include <algorithm> 
 #include <climits>
+#include <iostream>
+#include <fstream>
 u_int64_t *data;
 
 //uncomment to check correctness of the func
@@ -41,6 +43,7 @@ int main (int argc, char* argv[])
 	
 	bool bench_lookup = false;
 	
+	bool save_mphf = false;
 	
 	if(argc >=2 )
 	{
@@ -55,6 +58,7 @@ int main (int argc, char* argv[])
 	{
 		if(!strcmp("-check",argv[ii])) check_correctness= true;
 		if(!strcmp("-bench",argv[ii])) bench_lookup= true;
+		if(!strcmp("-save",argv[ii])) save_mphf= true;
 	}
 
 	
@@ -116,8 +120,9 @@ int main (int argc, char* argv[])
 	
 	gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 	
-	bool fastmode = true; //build with fast mode, requires a little bit more ram ( 3 % of elems  are loaded in ram)
-	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,2.0);
+	double gamma = 1.0 ;
+	
+	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gamma);
 	
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
 
@@ -130,6 +135,18 @@ int main (int argc, char* argv[])
 	u_int64_t mphf_value;
 	
 	printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+	
+	
+	if(save_mphf)
+	{
+		
+		std::string output_filename;
+		output_filename = "saved_mphf";
+		
+		std::ofstream os(output_filename, std::ios::binary);
+		bphf->save(os);
+		
+	}
 	
 	
 	if(check_correctness)	//test the mphf
