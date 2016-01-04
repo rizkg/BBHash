@@ -413,7 +413,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 	public:
 		
 		bitVector() : _size(0)
-		{}
+		{
+			_bitArray = NULL;
+		}
 		
 		bitVector(uint64_t n) : _size(n)
 		{
@@ -572,8 +574,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			os.write(reinterpret_cast<char const*>(&_size), sizeof(_size));
 			os.write(reinterpret_cast<char const*>(&_nchar), sizeof(_nchar));
 			os.write(reinterpret_cast<char const*>(_bitArray), (std::streamsize)(sizeof(uint64_t) * _nchar));
-			assert(_ranks.size() == (_size + _nb_bits_per_rank_sample - 1) / _nb_bits_per_rank_sample);
-		//	os.write(reinterpret_cast<char const*>(_ranks.data()), (std::streamsize)(sizeof(_ranks[0]) * _ranks.size()));
+			size_t sizer = _ranks.size();
+			os.write(reinterpret_cast<char const*>(&sizer),  sizeof(size_t));
+			os.write(reinterpret_cast<char const*>(_ranks.data()), (std::streamsize)(sizeof(_ranks[0]) * _ranks.size()));
 		}
 		
 		void load(std::istream& is)
@@ -581,8 +584,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			is.read(reinterpret_cast<char*>(&_size), sizeof(_size));
 			is.read(reinterpret_cast<char*>(&_nchar), sizeof(_nchar));
 			this->resize(_size);
-			_ranks.resize((_size + _nb_bits_per_rank_sample - 1) / _nb_bits_per_rank_sample);
-			//is.read(reinterpret_cast<char*>(_ranks.data()), (std::streamsize)(sizeof(_ranks[0]) * _ranks.size()));
+			is.read(reinterpret_cast<char *>(_bitArray), (std::streamsize)(sizeof(uint64_t) * _nchar));
+
+			size_t sizer;
+			is.read(reinterpret_cast<char *>(&sizer),  sizeof(size_t));
+			_ranks.resize(sizer);
+			is.read(reinterpret_cast<char*>(_ranks.data()), (std::streamsize)(sizeof(_ranks[0]) * _ranks.size()));
 		}
 		
 		
@@ -734,6 +741,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 	public:
 		mphf()
 		{}
+		
 		
 		~mphf()
 		{
@@ -928,7 +936,20 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			os.write(reinterpret_cast<char const*>(&_nelem), sizeof(_nelem));
 			_bitset->save(os);
 			
-			//todo save final hash
+			//save final hash
+			
+			
+			size_t final_hash_size = _final_hash.size();
+			
+			os.write(reinterpret_cast<char const*>(&final_hash_size), sizeof(size_t));
+
+			
+			// typename std::unordered_map<elem_t,uint64_t,Hasher_t>::iterator
+			for (auto it = _final_hash.begin(); it != _final_hash.end(); ++it )
+			{
+				os.write(reinterpret_cast<char const*>(&(it->first)), sizeof(elem_t));
+				os.write(reinterpret_cast<char const*>(&(it->second)), sizeof(uint64_t));
+			}
 
 		}
 		
@@ -938,9 +959,44 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			is.read(reinterpret_cast<char*>(&_nb_levels), sizeof(_nb_levels));
 			is.read(reinterpret_cast<char*>(&_lastbitsetrank), sizeof(_lastbitsetrank));
 			is.read(reinterpret_cast<char*>(&_nelem), sizeof(_nelem));
-
 			
+			_bitset = new bitVector();
 			_bitset->load(is);
+
+			//mini setup, recompute size of each level
+			_proba_collision = 1.0 -  pow(((_gamma*_nelem -1 ) / (float)(_gamma*_nelem)),_nelem-1);
+			_levels = (level **) malloc(_nb_levels * sizeof(level *) );
+			uint64_t previous_idx =0;
+			_hash_domain = (size_t)  (ceil(double(_nelem) * _gamma)) ;
+			for(int ii=0; ii<_nb_levels; ii++)
+			{
+				_levels[ii] = new level();
+				_levels[ii]->idx_begin = previous_idx;
+				_levels[ii]->hash_domain =  (( (uint64_t) (_hash_domain * pow(_proba_collision,ii)) + 63) / 64 ) * 64;
+				if(_levels[ii]->hash_domain == 0 )
+					_levels[ii]->hash_domain  = 64 ;
+				previous_idx += _levels[ii]->hash_domain;
+			}
+			
+			
+			
+			//restore final hash
+			
+			_final_hash.clear();
+			size_t final_hash_size ;
+			
+			is.read(reinterpret_cast<char *>(&final_hash_size), sizeof(size_t));
+			
+			for(int ii=0; ii<final_hash_size; ii++)
+			{
+				elem_t key;
+				uint64_t value;
+				
+				is.read(reinterpret_cast<char *>(&key), sizeof(elem_t));
+				is.read(reinterpret_cast<char *>(&value), sizeof(uint64_t));
+				
+				_final_hash[key] = value;
+			}
 
 		}
 		
@@ -980,9 +1036,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				if(_levels[ii]->hash_domain == 0 ) _levels[ii]->hash_domain  = 64 ;
 				previous_idx += _levels[ii]->hash_domain;
 				
-				printf("build level %i bit array : start %12llu, size %12llu  ",ii,_levels[ii]->idx_begin,_levels[ii]->hash_domain );
+				//printf("build level %i bit array : start %12llu, size %12llu  ",ii,_levels[ii]->idx_begin,_levels[ii]->hash_domain );
 				
-				printf(" expected elems : %.2f %% total \n",100.0*pow(_proba_collision,ii));
+				//printf(" expected elems : %.2f %% total \n",100.0*pow(_proba_collision,ii));
 				
 			}
 			
@@ -991,7 +1047,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				if(pow(_proba_collision,ii) < _percent_elem_loaded_for_fastMode)
 				{
 					_fastModeLevel = ii;
-					printf("fast mode level :  %i \n",ii);
+					//printf("fast mode level :  %i \n",ii);
 					break;
 				}
 			}

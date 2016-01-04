@@ -44,6 +44,7 @@ int main (int argc, char* argv[])
 	bool bench_lookup = false;
 	
 	bool save_mphf = false;
+	bool load_mphf = false;
 	
 	if(argc >=2 )
 	{
@@ -59,11 +60,11 @@ int main (int argc, char* argv[])
 		if(!strcmp("-check",argv[ii])) check_correctness= true;
 		if(!strcmp("-bench",argv[ii])) bench_lookup= true;
 		if(!strcmp("-save",argv[ii])) save_mphf= true;
+		if(!strcmp("-load",argv[ii])) load_mphf= true;
 	}
 
 	
 	
-	printf("Construct a BooPHF with  %lli elements (%lli MB for holding elems in ram) \n",nelem,nelem*sizeof(u_int64_t)/1024LL/1024LL);
 	
 	
 	//creating some random input data
@@ -84,7 +85,7 @@ int main (int argc, char* argv[])
 	
 	
 	
-	//methode simple pas besoin de dup
+	//methode simple pas besoin de  de-dupliquer, mais pas "random"
 //	data = (u_int64_t * ) calloc(nelem,sizeof(u_int64_t));
 //		data[0] = 0;
 //		u_int64_t step = ULLONG_MAX / nelem;
@@ -106,47 +107,76 @@ int main (int argc, char* argv[])
 
 	
 	
-	
-	
-
-	
-	///create the boophf
-	
-	auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
+	std::string output_filename;
+	output_filename = "saved_mphf";
+	boophf_t * bphf;
 	
 	clock_t begin, end;
-	
 	double t_begin,t_end; struct timeval timet;
 	
-	gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 	
-	double gamma = 1.0 ;
-	
-	boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gamma);
-	
-	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
+	if(!load_mphf)
+	{
+		printf("Construct a BooPHF with  %lli elements (%lli MB for holding elems in ram) \n",nelem,nelem*sizeof(u_int64_t)/1024LL/1024LL);
 
-	double elapsed = t_end - t_begin;
+		///create the boophf
+		
+		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
+		
 
-	
-	
-	printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
-	
-	u_int64_t mphf_value;
-	
-	printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+		
+		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
+		
+		double gamma = 1.0 ;
+		
+		bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gamma);
+		
+		gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
+		
+		double elapsed = t_end - t_begin;
+		
+		
+		
+		printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
+		
+		
+		printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+		
+	}
+	else
+	{
+		//assumes the mphf was saved before, reload it
+		bphf = new boomphf::mphf<u_int64_t,hasher_t>();
+
+		printf("Loading a BooPHF with  %lli elements (%lli MB for holding elems in ram) \n",nelem,nelem*sizeof(u_int64_t)/1024LL/1024LL);
+
+		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
+
+		
+		std::ifstream is(output_filename, std::ios::binary);
+		bphf->load(is);
+		
+		gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
+		double elapsed = t_end - t_begin;
+		
+		printf("BooPHF re-loaded perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
+		printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+
+
+	}
 	
 	
 	if(save_mphf)
 	{
-		
-		std::string output_filename;
-		output_filename = "saved_mphf";
+
 		
 		std::ofstream os(output_filename, std::ios::binary);
 		bphf->save(os);
 		
 	}
+	
+	u_int64_t mphf_value;
+
 	
 	
 	if(check_correctness)	//test the mphf
