@@ -12,6 +12,8 @@
 #include <fstream>
 u_int64_t *data;
 
+//#include <chrono>
+
 //uncomment to check correctness of the func
 //#define CHECK_MPHF
 
@@ -39,6 +41,11 @@ u_int64_t nelem = 100000000;
 int nthreads = 1;
 int main (int argc, char* argv[])
 {
+
+	//if we want a random seed from timer
+//	typedef std::chrono::high_resolution_clock myclock;
+//	myclock::time_point beginning = myclock::now();
+	
 	bool check_correctness = false;
 	
 	bool bench_lookup = false;
@@ -73,10 +80,19 @@ int main (int argc, char* argv[])
 	//	for (u_int64_t i = 0; i < nelem; i++)
 	//		data[i] = random64();
 	
+	
+	
+	// obtain a seed from the timer
+
+//	myclock::duration d = myclock::now() - beginning;
+//	unsigned seed2 = d.count();
+	
 	uint64_t rab = 100;
 //	
 	static std::mt19937_64 rng;
-	rng.seed(std::mt19937_64::default_seed);
+	rng.seed(std::mt19937_64::default_seed); //default seed
+
+	//rng.seed(seed2); //random seed from timer
 	data = (u_int64_t * ) calloc(nelem+rab,sizeof(u_int64_t));
 
 	for (u_int64_t i = 1; i < nelem+rab; i++)
