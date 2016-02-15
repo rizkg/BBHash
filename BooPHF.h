@@ -703,7 +703,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				_tempBitset =  new bitVector(_levels[ii]->hash_domain); // temp collision bitarray for this level
 
 				processLevel(input_range,ii);
-				
+
 				_levels[ii]->bitset->clearCollisions(0 , _levels[ii]->hash_domain , _tempBitset);
 				
 				offset = _levels[ii]->bitset->build_ranks(offset);
@@ -771,8 +771,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			return totalsize;
 		}
 	
-		template <typename Range,typename Iterator>
-        void pthread_processLevel(elem_t * buffer, Range input_range, std::shared_ptr<Iterator> shared_it, std::shared_ptr<Iterator> until_p, int i)
+		template <typename Iterator>  //typename Range,
+        void pthread_processLevel(elem_t * buffer, std::shared_ptr<Iterator> shared_it, std::shared_ptr<Iterator> until_p, int i)
 		{
 			uint64_t nb_done =0;
 			int tid =  __sync_fetch_and_add (&_nb_living, 1);
@@ -1084,7 +1084,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			{
 				pthread_join(tab_threads[ii], NULL);
 			}
-			//printf("\ngoing to level %i  : %llu elems  %.2f %%  expected : %.2f %% \n",i,_cptLevel,100.0* _cptLevel/(float)_nelem,100.0* pow(_proba_collision,i) );
+		//	printf("\ngoing to level %i  : %llu elems  %.2f %%  expected : %.2f %% \n",i,_cptLevel,100.0* _cptLevel/(float)_nelem,100.0* pow(_proba_collision,i) );
 			
 		}
 	
@@ -1140,7 +1140,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
         std::shared_ptr<it_type> until_p = std::static_pointer_cast<it_type>(targ->until_p);
 		pthread_mutex_unlock(mutex);
 		
-		obw->pthread_processLevel(buffer, *(targ->range), startit, until_p, level); // i
+		obw->pthread_processLevel(buffer, startit, until_p, level); 
 		
 		free(buffer);
 		return NULL;
