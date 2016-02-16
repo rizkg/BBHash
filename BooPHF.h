@@ -725,7 +725,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 		uint64_t lookup(elem_t elem)
 		{
-			auto hashes = _hasher(elem);
+			//auto hashes = _hasher(elem);
 			uint64_t non_minimal_hp,minimal_hp;
 			
 			
@@ -810,7 +810,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 						{
 							uint64_t idxl2 = __sync_fetch_and_add(& _idxLevelsetLevelFastmode,1);
 							//si depasse taille attendue pour setLevelFastmode, fall back sur slow mode mais devrait pas arriver si hash ok et proba avec nous
-							if(idxl2> setLevelFastmode.size())
+							if(idxl2>= setLevelFastmode.size())
 								_fastmode = false;
 							else
 								setLevelFastmode[idxl2] = val; // create set for fast mode
@@ -891,7 +891,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			is.read(reinterpret_cast<char*>(&_lastbitsetrank), sizeof(_lastbitsetrank));
 			is.read(reinterpret_cast<char*>(&_nelem), sizeof(_nelem));
 			
-			
 			_levels = (level **) malloc(_nb_levels * sizeof(level *) );
 
 			for(int ii=0; ii<_nb_levels; ii++)
@@ -925,7 +924,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			is.read(reinterpret_cast<char *>(&final_hash_size), sizeof(size_t));
 			
-			for(int ii=0; ii<final_hash_size; ii++)
+			for(unsigned int ii=0; ii<final_hash_size; ii++)
 			{
 				elem_t key;
 				uint64_t value;
