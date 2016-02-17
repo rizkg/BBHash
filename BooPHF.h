@@ -39,7 +39,6 @@ namespace boomphf {
 
 	inline unsigned int popcount_64(uint64_t x)
 	{
-
 		unsigned int low = x & 0xffffffff ;
 		unsigned int high = ( x >> 32LL) & 0xffffffff ;
 

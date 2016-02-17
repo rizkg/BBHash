@@ -133,9 +133,9 @@ class file_binary{
 
 //PARAMETERS
 u_int64_t nelem = 1000*1000*1000;
-uint nthreads = 4;
-double gammaFactor = 2.0;
-uint nBuckets =200;
+uint nthreads = 10;
+double gammaFactor = 1.0;
+uint nBuckets =500;
 vector<FILE*> vFiles(nBuckets);
 vector<uint> elinbuckets(nBuckets);
 vector<boophf_t*> MPHFs(nBuckets);
@@ -144,7 +144,7 @@ vector<boophf_t*> MPHFs(nBuckets);
 void compactBucket(uint start, uint n ){
 	for(uint i(start);i<start+n;++i){
 		rewind(vFiles[i]);
-		u_int64_t *data= (u_int64_t * ) calloc(elinbuckets[i],sizeof(u_int64_t));
+		u_int64_t *data= (u_int64_t * ) malloc(elinbuckets[i]*sizeof(u_int64_t));
 		// data = new u_int64_t(elinbuckets[i]);
 		fread(data, sizeof(u_int64_t), elinbuckets[i], vFiles[i]);
 		// for(uint ii(0);ii<elinbuckets[i];++ii){
@@ -153,7 +153,7 @@ void compactBucket(uint start, uint n ){
 		// printf("Go ? !!!\n");
 		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+elinbuckets[i]));
 		// printf("Go ?? !!!\n");
-		MPHFs[i]= new boomphf::mphf<u_int64_t,hasher_t>(elinbuckets[i],data_iterator,nthreads,gammaFactor);
+		MPHFs[i]= new boomphf::mphf<u_int64_t,hasher_t>(elinbuckets[i],data_iterator,1,gammaFactor);
 		// printf("Go com???pactions !!!\n");
 		// delete(data);
 		free(data);
@@ -227,26 +227,27 @@ int main (int argc, char* argv[])
 
 		printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
 		// cin.get();
-
-		u_int64_t step2 = ULLONG_MAX / nelem;
-		u_int64_t current2 = 0;
-		u_int64_t range_problems(0);
-		begin = clock();
-		for (u_int64_t i = 0; i < nelem; i++){
-			current2 += step2;
-			// cout<<current2<<endl;
-			uint64_t hash=korenXor(current2)%nBuckets;
-			u_int64_t mphf_value = MPHFs[hash]->lookup(current2)+hash*(nelem/nBuckets);
-			// cout<<mphf_value<<endl;
-			if(mphf_value>=nelem){
-				printf("there is %llu problems\n", range_problems);
-				range_problems++;
+		if(true){
+			u_int64_t step2 = ULLONG_MAX / nelem;
+			u_int64_t current2 = 0;
+			u_int64_t range_problems(0);
+			begin = clock();
+			for (u_int64_t i = 0; i < nelem; i++){
+				current2 += step2;
+				// cout<<current2<<endl;
+				uint64_t hash=korenXor(current2)%nBuckets;
+				u_int64_t mphf_value = MPHFs[hash]->lookup(current2)+hash*(nelem/nBuckets);
+				// cout<<mphf_value<<endl;
+				if(mphf_value>=nelem){
+					printf("there is %llu problems\n", range_problems);
+					range_problems++;
+				}
 			}
-		}
-		printf("there is %llu problems\n", range_problems);
+			printf("there is %llu problems\n", range_problems);
 
-		end = clock();
-		printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem);
+			end = clock();
+			printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem);
+		}
 		return EXIT_SUCCESS;
 	}
 
