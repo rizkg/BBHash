@@ -12,6 +12,7 @@
 #include <fstream>
 #include <assert.h>
 #include <thread>
+#include <math.h>
 
 //#include <chrono>
 
@@ -132,10 +133,10 @@ class file_binary{
 };
 
 //PARAMETERS
-u_int64_t nelem = 1000*1000*1000;
-uint nthreads = 10;
+u_int64_t nelem = 1000*1000;
+uint nthreads = 8; //warning must be a divisor of nBuckets
 double gammaFactor = 1.0;
-uint nBuckets =500;
+uint nBuckets = 96;
 vector<FILE*> vFiles(nBuckets);
 vector<uint> elinbuckets(nBuckets);
 vector<boophf_t*> MPHFs(nBuckets);
@@ -153,7 +154,7 @@ void compactBucket(uint start, uint n ){
 		// printf("Go ? !!!\n");
 		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+elinbuckets[i]));
 		// printf("Go ?? !!!\n");
-		MPHFs[i]= new boomphf::mphf<u_int64_t,hasher_t>(elinbuckets[i],data_iterator,1,gammaFactor);
+		MPHFs[i]= new boomphf::mphf<u_int64_t,hasher_t>(elinbuckets[i],data_iterator,1,gammaFactor,false);
 		// printf("Go com???pactions !!!\n");
 		// delete(data);
 		free(data);
@@ -171,7 +172,7 @@ int main (int argc, char* argv[])
 	bool bench_lookup = false;
 	bool save_mphf = false;
 	bool load_mphf = false;
-	bool buckets = true;
+	bool buckets = false;
 	bool from_disk = false;
 
 	if(argc >=2 )
@@ -190,6 +191,7 @@ int main (int argc, char* argv[])
 		if(!strcmp("-save",argv[ii])) save_mphf= true;
 		if(!strcmp("-load",argv[ii])) load_mphf= true;
 		if(!strcmp("-fromdisk",argv[ii])) from_disk= true;
+		if(!strcmp("-buckets",argv[ii])) buckets= true;
 
 	}
 
@@ -206,11 +208,22 @@ int main (int argc, char* argv[])
 			current = current + step;
 			// cout<<current<<endl;
 			u_int64_t hash=korenXor(current)%nBuckets;
+			//printf("hash %i  nBuckets %i\n",hash,nBuckets);
 			fwrite(&current, sizeof(u_int64_t), 1, vFiles[hash]);
 			++elinbuckets[hash];
 		}
 
+		vector<uint> nb_elem_in_previous_buckets (nBuckets);
+		nb_elem_in_previous_buckets[0] = 0 ;
+		for(int ii=1; ii<nBuckets; ii++ )
+		{
+			nb_elem_in_previous_buckets[ii] = nb_elem_in_previous_buckets[ii-1] + elinbuckets[ii-1];
+		}
+		
 		printf("Go compactions !!!\n");
+		
+		double integ;
+		assert(  modf((double)nBuckets/nthreads ,&integ) == 0  );
 		vector<thread> threads;
 		for(uint n(0);n<nthreads;++n){
 			threads.push_back(thread(compactBucket,n*nBuckets/nthreads,nBuckets/nthreads));
@@ -227,7 +240,7 @@ int main (int argc, char* argv[])
 
 		printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
 		// cin.get();
-		if(true){
+		if(check_correctness){
 			u_int64_t step2 = ULLONG_MAX / nelem;
 			u_int64_t current2 = 0;
 			u_int64_t range_problems(0);
@@ -236,11 +249,11 @@ int main (int argc, char* argv[])
 				current2 += step2;
 				// cout<<current2<<endl;
 				uint64_t hash=korenXor(current2)%nBuckets;
-				u_int64_t mphf_value = MPHFs[hash]->lookup(current2)+hash*(nelem/nBuckets);
+				u_int64_t mphf_value = MPHFs[hash]->lookup(current2)+  nb_elem_in_previous_buckets [hash];
 				// cout<<mphf_value<<endl;
 				if(mphf_value>=nelem){
-					printf("there is %llu problems\n", range_problems);
 					range_problems++;
+					printf("there is %llu problems \n", range_problems);
 				}
 			}
 			printf("there is %llu problems\n", range_problems);

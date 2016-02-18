@@ -82,17 +82,17 @@ namespace boomphf {
 
 			if(!timer_mode)
 			{
-				// fprintf(stderr,"[");fflush(stderr);
+				 fprintf(stderr,"[");fflush(stderr);
 			}
 		}
 
 		void finish()
 		{
 			set(todo);
-			// if(timer_mode)
-			// 	fprintf(stderr,"\n");
-			// else
-			// 	fprintf(stderr,"]\n");
+			 if(timer_mode)
+			 	fprintf(stderr,"\n");
+			 else
+			 	fprintf(stderr,"]\n");
 
 			fflush(stderr);
 			todo= 0;
@@ -131,15 +131,15 @@ namespace boomphf {
 					int min_r  = (int)(rem / 60) ;
 					rem -= min_r*60;
 
-				// fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
-				// 		message.c_str(),
-				// 		100*(double)done/todo,
-				// 		min_e,elapsed,min_r,rem);
+				 fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
+				 		message.c_str(),
+				 		100*(double)done/todo,
+				 		min_e,elapsed,min_r,rem);
 
 				}
 				else
 				{
-					// fprintf(stderr,"-");fflush(stderr);
+					 fprintf(stderr,"-");fflush(stderr);
 				}
 				partial -= steps;
 			}
@@ -170,14 +170,14 @@ namespace boomphf {
 					int min_r  =  (int)(rem / 60) ;
 					rem -= min_r*60;
 
-					// fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
-					// 		message.c_str(),
-					// 		100*(double)total_done/todo,
-					// 		min_e,elapsed,min_r,rem);
+					 fprintf(stderr,"%c[%s]  %-5.3g%%   elapsed: %3i min %-2.0f sec   remaining: %3i min %-2.0f sec",13,
+					 		message.c_str(),
+					 		100*(double)total_done/todo,
+					 		min_e,elapsed,min_r,rem);
 				}
 				else
 				{
-					// fprintf(stderr,"-");fflush(stderr);
+					 fprintf(stderr,"-");fflush(stderr);
 				}
 				partial_threaded[tid] -= steps;
 
@@ -680,21 +680,23 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 		// allow perc_elem_loaded  elements to be loaded in ram for faster construction (default 3%), set to 0 to desactivate
 		template <typename Range>
-		mphf( size_t n, Range const& input_range,int num_thread = 1,  double gamma = 2.0 ,float perc_elem_loaded = 0.03) :
-		_gamma(gamma), _hash_domain(size_t(ceil(double(n) * gamma))), _nelem(n), _num_thread(num_thread), _percent_elem_loaded_for_fastMode (perc_elem_loaded)
+		mphf( size_t n, Range const& input_range,int num_thread = 1,  double gamma = 2.0 , bool progress =true, float perc_elem_loaded = 0.03) :
+		_gamma(gamma), _hash_domain(size_t(ceil(double(n) * gamma))), _nelem(n), _num_thread(num_thread), _percent_elem_loaded_for_fastMode (perc_elem_loaded), _withprogress(progress)
 		{
 			if(_percent_elem_loaded_for_fastMode > 0.0 )
 				_fastmode =true;
 
 			setup();
 
+			if(_withprogress)
+			{
 			_progressBar.timer_mode=1;
 
 			if(_fastmode)
 				_progressBar.init( _nelem * (_fastModeLevel+1) +  ( _nelem * pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))    ,"Building BooPHF");
 			else
 				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF");
-
+			}
 
 			uint64_t offset = 0;
 			for(int ii = 0; ii< _nb_levels; ii++)
@@ -710,6 +712,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				delete _tempBitset;
 			}
 
+			if(_withprogress)
 			_progressBar.finish_threaded();
 
 
@@ -845,7 +848,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 					}
 
 					nb_done++;
-					if((nb_done&1023) ==0 ) {_progressBar.inc(nb_done,tid);nb_done=0; }
+					if((nb_done&1023) ==0  && _withprogress) {_progressBar.inc(nb_done,tid);nb_done=0; }
 
 				}
 
@@ -976,16 +979,16 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				//printf(" expected elems : %.2f %% total \n",100.0*pow(_proba_collision,ii));
 
 			}
-			_fastModeLevel=1;
+		//	_fastModeLevel=1;
 			for(int ii=0; ii<_nb_levels; ii++)
 			{
-				_fastModeLevel=1;
-				// if(pow(_proba_collision,ii) < _percent_elem_loaded_for_fastMode)
-				// {
-				// 	_fastModeLevel = ii;
-				// 	// printf("fast mode level :  %i \n",ii);
-				// 	break;
-				// }
+			//	_fastModeLevel=1;
+				 if(pow(_proba_collision,ii) < _percent_elem_loaded_for_fastMode)
+				 {
+				 	_fastModeLevel = ii;
+				 	// printf("fast mode level :  %i \n",ii);
+				 	break;
+				 }
 			}
 
 
@@ -1059,9 +1062,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.begin()));
 			t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.end()));
 			t_arg.level = i;
-
 			if(i >= (_fastModeLevel+1) && _fastmode)
-			// if(true)
 			{
 				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevelFastmode[0]), static_cast<const elem_t*>( (&setLevelFastmode[0]) +setLevelFastmode.size()));
                 typedef decltype(data_iterator.begin()) fastmode_it_type;
@@ -1112,6 +1113,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		bool _fastmode;
 		std::vector< elem_t > setLevelFastmode;
 		int _fastModeLevel;
+		bool _withprogress;
 
 	public:
 		pthread_mutex_t _mutex;
