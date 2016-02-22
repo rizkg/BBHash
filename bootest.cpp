@@ -53,21 +53,45 @@ typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
 
 
-// iterator from disk file of u_int64_t  todo template
+// iterator from disk file of u_int64_t with buffered read,   todo template
 class bfile_iterator : public std::iterator<std::forward_iterator_tag, u_int64_t>{
 	public:
+	
 	bfile_iterator()
 	: _is(nullptr)
-	, _pos(0)
-	{}
-
-	bfile_iterator(FILE* is)
-	: _is(is)
-	, _pos(0)
+	, _pos(0) ,_inbuff (0), _cptread(0)
 	{
+		_buffsize = 10000;
+		_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
+	}
+
+	bfile_iterator(const bfile_iterator& cr)
+	{
+		_buffsize = cr._buffsize;
+		_pos = cr._pos;
+		_is = cr._is;
+		_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
+		 memcpy(_buffer,cr._buffer,_buffsize*sizeof(u_int64_t) );
+		_inbuff = cr._inbuff;
+		_cptread = cr._cptread;
+		_elem = cr._elem;
+	}
+	
+	bfile_iterator(FILE* is): _is(is) , _pos(0) ,_inbuff (0), _cptread(0)
+	{
+		_buffsize = 10000;
+		_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
 		int reso = fseek(_is,0,SEEK_SET);
 		advance();
 	}
+	
+	~bfile_iterator()
+	{
+		if(_buffer!=NULL)
+			free(_buffer);
+	}
+	
+	
 	u_int64_t const& operator*()  {  return _elem;  }
 
 	bfile_iterator& operator++()
@@ -87,19 +111,31 @@ class bfile_iterator : public std::iterator<std::forward_iterator_tag, u_int64_t
 	private:
 	void advance()
 	{
-		assert(_is);
 		_pos++;
-		int res = fread(&_elem,sizeof(u_int64_t),1,_is);
-		if(res == 0)
+		
+		if(_cptread >= _inbuff)
 		{
-			_is = nullptr;
-			_pos = 0;
-			return;
+			int res = fread(_buffer,sizeof(u_int64_t),_buffsize,_is);
+			_inbuff = res; _cptread = 0;
+			
+			if(res == 0)
+			{
+				_is = nullptr;
+				_pos = 0;
+				return;
+			}
 		}
+		
+		_elem = _buffer[_cptread];
+		_cptread ++;
 	}
 	u_int64_t _elem;
 	FILE * _is;
 	unsigned long _pos;
+	
+	u_int64_t * _buffer; // for buffered read
+	int _inbuff, _cptread;
+	int _buffsize;
 };
 
 
@@ -134,7 +170,7 @@ class file_binary{
 
 //PARAMETERS
 u_int64_t nelem = 1000*1000;
-uint nthreads = 8; //warning must be a divisor of nBuckets
+uint nthreads = 1; //warning must be a divisor of nBuckets
 double gammaFactor = 1.0;
 uint nBuckets = 96;
 vector<FILE*> vFiles(nBuckets);
@@ -144,16 +180,16 @@ vector<boophf_t*> MPHFs(nBuckets);
 
 void compactBucket(uint start, uint n ){
 	for(uint i(start);i<start+n;++i){
-		rewind(vFiles[i]);
-		u_int64_t *data= (u_int64_t * ) malloc(elinbuckets[i]*sizeof(u_int64_t));
-		// data = new u_int64_t(elinbuckets[i]);
-		fread(data, sizeof(u_int64_t), elinbuckets[i], vFiles[i]);
-		// for(uint ii(0);ii<elinbuckets[i];++ii){
-		// 	printf("there is %llu \n", data[ii]);
-		// }
-		// printf("Go ? !!!\n");
-		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+elinbuckets[i]));
+//		rewind(vFiles[i]);
+//		u_int64_t *data= (u_int64_t * ) malloc(elinbuckets[i]*sizeof(u_int64_t));
+//		fread(data, sizeof(u_int64_t), elinbuckets[i], vFiles[i]);
+//		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+elinbuckets[i]));
 		// printf("Go ?? !!!\n");
+		
+		
+		auto data_iterator = file_binary(("bucket"+to_string(i)).c_str());
+
+		
 		MPHFs[i]= new boomphf::mphf<u_int64_t,hasher_t>(elinbuckets[i],data_iterator,1,gammaFactor,false);
 		// printf("Go com???pactions !!!\n");
 		// delete(data);
@@ -173,14 +209,24 @@ int main (int argc, char* argv[])
 	bool save_mphf = false;
 	bool load_mphf = false;
 	bool buckets = false;
-	bool from_disk = false;
+	bool from_disk = true;
 
-	if(argc >=2 )
+	if(argc <3 )
 	{
-		nelem = strtoul(argv[1], NULL,0);
+		printf("Usage :\n");
+		printf("%s <nelem> <nthreads>  [options]\n",argv[0]);
+		printf("Options:\n");
+		printf("\t-check\n");
+		printf("\t-bench\n");
+		printf("\t-save\n");
+		printf("\t-load\n");
+		printf("\t-inram\n");
+		printf("\t-buckets\n");
+		return EXIT_FAILURE;
 	}
 
 	if(argc >=3 ){
+		nelem = strtoul(argv[1], NULL,0);
 		nthreads = atoi(argv[2]);
 	}
 
@@ -190,30 +236,82 @@ int main (int argc, char* argv[])
 		if(!strcmp("-bench",argv[ii])) bench_lookup= true;
 		if(!strcmp("-save",argv[ii])) save_mphf= true;
 		if(!strcmp("-load",argv[ii])) load_mphf= true;
-		if(!strcmp("-fromdisk",argv[ii])) from_disk= true;
+		if(!strcmp("-inram",argv[ii])) from_disk= false;
 		if(!strcmp("-buckets",argv[ii])) buckets= true;
 
 	}
 
+	FILE * key_file = NULL;
+	
+	if(from_disk){
+		key_file = fopen("keyfile","w+");
+	}
+	
+	uint64_t ii, jj;
+
+	//generation of keys
+	if(!from_disk && !buckets){
+		uint64_t rab = 100;
+		
+		static std::mt19937_64 rng;
+		rng.seed(std::mt19937_64::default_seed); //default seed
+		
+		//rng.seed(seed2); //random seed from timer
+		data = (u_int64_t * ) calloc(nelem+rab,sizeof(u_int64_t));
+		
+		for (u_int64_t i = 1; i < nelem+rab; i++){
+			data[i] = rng();
+		}
+		printf("de-duplicating items \n");
+		
+		std::sort(data,data+nelem+rab);
+		
+		for (ii = 1, jj = 0; ii < nelem+rab; ii++) {
+			if (data[ii] != data[jj])
+				data[++jj] = data[ii];
+		}
+		printf("found %lli duplicated items  \n",nelem+rab-(jj + 1) );
+	}
+	else{
+		//methode simple pas besoin de  de-dupliquer, mais pas "random"
+		u_int64_t step = ULLONG_MAX / nelem;
+		u_int64_t current = 0;
+		fwrite(&current, sizeof(u_int64_t), 1, key_file);
+		//printf("from disk  nelem %lli  step %llu \n",nelem,step);
+		for (u_int64_t i = 1; i < nelem; i++)
+		{
+			current = current + step;
+			fwrite(&current, sizeof(u_int64_t), 1, key_file);
+			//printf("writing  %llu\n", current);
+
+		}
+		fclose(key_file);
+		printf("key file generated \n");
+
+	}
+	
+	
+	vector<uint> nb_elem_in_previous_buckets (nBuckets);
+
+	
 	if(buckets){
 		clock_t begin, end;
 		double t_begin,t_end; struct timeval timet;
 		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
+		
 		for(uint i(0);i<nBuckets;++i){
 			vFiles[i]=fopen(("bucket"+to_string(i)).c_str(),"w+");
 		}
-		u_int64_t step = ULLONG_MAX / nelem;
-		u_int64_t current = 0;
-		for (u_int64_t i = 0; i < nelem; i++){
-			current = current + step;
-			// cout<<current<<endl;
-			u_int64_t hash=korenXor(current)%nBuckets;
-			//printf("hash %i  nBuckets %i\n",hash,nBuckets);
-			fwrite(&current, sizeof(u_int64_t), 1, vFiles[hash]);
+		
+		
+		auto data_iterator = file_binary("keyfile");
+		for (auto const& key: data_iterator) {
+			u_int64_t hash=korenXor(key)%nBuckets;
+			fwrite(&key, sizeof(u_int64_t), 1, vFiles[hash]);
 			++elinbuckets[hash];
 		}
-
-		vector<uint> nb_elem_in_previous_buckets (nBuckets);
+		
+		
 		nb_elem_in_previous_buckets[0] = 0 ;
 		for(int ii=1; ii<nBuckets; ii++ )
 		{
@@ -240,6 +338,7 @@ int main (int argc, char* argv[])
 
 		printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
 		// cin.get();
+		
 		if(check_correctness){
 			u_int64_t step2 = ULLONG_MAX / nelem;
 			u_int64_t current2 = 0;
@@ -261,72 +360,30 @@ int main (int argc, char* argv[])
 			end = clock();
 			printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem);
 		}
+		
+		if(bench_lookup)
+		{
+				auto data_iterator = file_binary("keyfile");
+				
+				u_int64_t dumb=0;
+			
+				begin = clock();
+				for (auto const& key: data_iterator) {
+					uint64_t hash=korenXor(key)%nBuckets;
+					u_int64_t mphf_value = MPHFs[hash]->lookup(key)+  nb_elem_in_previous_buckets [hash];
+					dumb+= mphf_value;
+				}
+				end = clock();
+
+				printf("Buckets BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem,dumb);
+		}
+	
+		
+		
 		return EXIT_SUCCESS;
 	}
 
-	FILE * key_file = NULL;
 
-	if(from_disk){
-		key_file = fopen("keyfile","w+");
-	}
-
-	//creating some random input data
-	//	srandomdev(); //init random generator
-	//	data = (u_int64_t * ) calloc(nelem,sizeof(u_int64_t));
-	//	for (u_int64_t i = 0; i < nelem; i++)
-	//		data[i] = random64();
-
-	uint64_t ii, jj;
-
-	// obtain a seed from the timer
-
-//	myclock::duration d = myclock::now() - beginning;
-//	unsigned seed2 = d.count();
-
-	if(!from_disk){
-		uint64_t rab = 100;
-
-		static std::mt19937_64 rng;
-		rng.seed(std::mt19937_64::default_seed); //default seed
-
-		//rng.seed(seed2); //random seed from timer
-		data = (u_int64_t * ) calloc(nelem+rab,sizeof(u_int64_t));
-
-		for (u_int64_t i = 1; i < nelem+rab; i++){
-			data[i] = rng();
-		}
-
-		printf("de-duplicating items \n");
-
-		std::sort(data,data+nelem+rab);
-
-		for (ii = 1, jj = 0; ii < nelem+rab; ii++) {
-			if (data[ii] != data[jj])
-				data[++jj] = data[ii];
-		}
-
-		printf("found %lli duplicated items  \n",nelem+rab-(jj + 1) );
-
-		//	data = (u_int64_t * ) calloc(nelem,sizeof(u_int64_t));
-		//		data[0] = 0;
-		//		u_int64_t step = ULLONG_MAX / nelem;
-		//			for (u_int64_t i = 1; i < nelem; i++)
-		//				data[i] = data[i-1] +step;
-		//
-	}
-	else{
-		//methode simple pas besoin de  de-dupliquer, mais pas "random"
-		u_int64_t step = ULLONG_MAX / nelem;
-		u_int64_t current = 0;
-		fwrite(&current, sizeof(u_int64_t), 1, key_file);
-		//printf("from disk  nelem %lli  step %llu \n",nelem,step);
-		for (u_int64_t i = 1; i < nelem; i++)
-		{
-			current = current + step;
-			fwrite(&current, sizeof(u_int64_t), 1, key_file);
-		}
-		fclose(key_file);
-	}
 
 	std::string output_filename;
 	output_filename = "saved_mphf";
@@ -336,8 +393,8 @@ int main (int argc, char* argv[])
 	double t_begin,t_end; struct timeval timet;
 
 	if(!load_mphf){
-		printf("Construct a BooPHF with  %lli elements (%lli MB for holding elems in ram) \n",nelem,nelem*sizeof(u_int64_t)/1024LL/1024LL);
-
+		printf("Construct a BooPHF with  %lli elements  \n",nelem);
+//(%lli MB for holding elems in ram)  ,nelem*sizeof(u_int64_t)/1024LL/1024LL
 		///create the boophf
 
 		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
@@ -345,7 +402,6 @@ int main (int argc, char* argv[])
 		//MPHF CREATION
 		if(from_disk)
 		{
-
 			auto data_iterator = file_binary("keyfile");
 			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
 		}
@@ -367,7 +423,7 @@ int main (int argc, char* argv[])
 		//assumes the mphf was saved before, reload it
 		bphf = new boomphf::mphf<u_int64_t,hasher_t>();
 
-		printf("Loading a BooPHF with  %lli elements (%lli MB for holding elems in ram) \n",nelem,nelem*sizeof(u_int64_t)/1024LL/1024LL);
+		printf("Loading a BooPHF with  %lli elements  \n",nelem);
 
 		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 
@@ -482,6 +538,25 @@ int main (int argc, char* argv[])
 		printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem,dumb);
 	}
 
+	
+	if(bench_lookup &&  from_disk)
+	{
+
+			auto data_iterator = file_binary("keyfile");
+			
+			u_int64_t dumb=0;
+			begin = clock();
+			
+			for (auto const& key: data_iterator) {
+				mphf_value = bphf->lookup(key);
+				//do some silly work
+				dumb+= mphf_value;
+			}
+			end = clock();
+			printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem,dumb);
+
+	}
+	
 	if(!from_disk){
 		free(data);
 	}

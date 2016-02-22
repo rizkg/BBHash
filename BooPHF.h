@@ -778,10 +778,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		{
 			uint64_t nb_done =0;
 			int tid =  __sync_fetch_and_add (&_nb_living, 1);
-
 			auto until = *until_p;
 			uint64_t inbuff =0;
 
+
+			
 			for (bool isRunning=true;  isRunning ; )
 			{
 
@@ -979,10 +980,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				//printf(" expected elems : %.2f %% total \n",100.0*pow(_proba_collision,ii));
 
 			}
-		//	_fastModeLevel=1;
+			
 			for(int ii=0; ii<_nb_levels; ii++)
 			{
-			//	_fastModeLevel=1;
 				 if(pow(_proba_collision,ii) < _percent_elem_loaded_for_fastMode)
 				 {
 				 	_fastModeLevel = ii;
@@ -1045,7 +1045,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		template <typename Range>
 		void processLevel(Range const& input_range,int i)
 		{
-			//printf("process level %i \n",i);
 			////alloc the bitset for this level
 			_levels[i]->bitset =   new bitVector(_levels[i]->hash_domain); ;
 
@@ -1061,6 +1060,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			t_arg.range = &input_range;
 			t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.begin()));
 			t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.end()));
+
 			t_arg.level = i;
 			if(i >= (_fastModeLevel+1) && _fastmode)
 			{
