@@ -180,20 +180,11 @@ vector<boophf_t*> MPHFs(nBuckets);
 
 void compactBucket(uint start, uint n ){
 	for(uint i(start);i<start+n;++i){
-//		rewind(vFiles[i]);
-//		u_int64_t *data= (u_int64_t * ) malloc(elinbuckets[i]*sizeof(u_int64_t));
-//		fread(data, sizeof(u_int64_t), elinbuckets[i], vFiles[i]);
-//		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+elinbuckets[i]));
-		// printf("Go ?? !!!\n");
-		
-		
-		auto data_iterator = file_binary(("bucket"+to_string(i)).c_str());
 
+		auto data_iterator = file_binary(("bucket"+to_string(i)).c_str());
 		
 		MPHFs[i]= new boomphf::mphf<u_int64_t,hasher_t>(elinbuckets[i],data_iterator,1,gammaFactor,false);
-		// printf("Go com???pactions !!!\n");
-		// delete(data);
-		free(data);
+
 	}
 }
 
@@ -238,7 +229,6 @@ int main (int argc, char* argv[])
 		if(!strcmp("-load",argv[ii])) load_mphf= true;
 		if(!strcmp("-inram",argv[ii])) from_disk= false;
 		if(!strcmp("-buckets",argv[ii])) buckets= true;
-
 	}
 
 	FILE * key_file = NULL;
@@ -303,7 +293,7 @@ int main (int argc, char* argv[])
 			vFiles[i]=fopen(("bucket"+to_string(i)).c_str(),"w+");
 		}
 		
-		
+		printf("splitting keys ..\n");
 		auto data_iterator = file_binary("keyfile");
 		for (auto const& key: data_iterator) {
 			u_int64_t hash=korenXor(key)%nBuckets;
