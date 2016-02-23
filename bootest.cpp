@@ -37,6 +37,13 @@ uint64_t korenXor(uint64_t x){
 	return x;
 }
 
+inline double get_time_usecs() {
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return double(tv.tv_sec) * 1000000 + double(tv.tv_usec);
+}
+
+
 
 uint64_t random64 ()
 {
@@ -168,6 +175,45 @@ class file_binary{
 	FILE * _is;
 };
 
+//stolen from emphf
+struct stats_accumulator {
+	stats_accumulator()
+	: m_n(0)
+	, m_mean(0)
+	, m_m2(0)
+	{}
+	
+	void add(double x)
+	{
+		m_n += 1;
+		auto delta = x - m_mean;
+		m_mean += delta / m_n;
+		m_m2 += delta * (x - m_mean);
+	}
+	
+	double mean() const
+	{
+		return m_mean;
+	}
+	
+	double variance() const
+	{
+		return m_m2 / (m_n - 1);
+	}
+	
+	double relative_stddev() const
+	{
+		return std::sqrt(variance()) / mean() * 100;
+	}
+	
+private:
+	double m_n;
+	double m_mean;
+	double m_m2;
+};
+
+
+
 //PARAMETERS
 u_int64_t nelem = 1000*1000;
 uint nthreads = 1; //warning must be a divisor of nBuckets
@@ -176,6 +222,7 @@ uint nBuckets = 96;
 vector<FILE*> vFiles(nBuckets);
 vector<uint> elinbuckets(nBuckets);
 vector<boophf_t*> MPHFs(nBuckets);
+u_int64_t nb_in_bench_file;
 
 
 void compactBucket(uint start, uint n ){
@@ -232,7 +279,8 @@ int main (int argc, char* argv[])
 	}
 
 	FILE * key_file = NULL;
-	
+	FILE * bench_file = NULL;
+
 	if(from_disk){
 		key_file = fopen("keyfile","w+");
 	}
@@ -278,6 +326,28 @@ int main (int argc, char* argv[])
 		fclose(key_file);
 		printf("key file generated \n");
 
+		if(bench_lookup)
+		{
+			bench_file = fopen("benchfile","w+");
+			//create a test file
+			//if n < 10 M take all elements, otherwise regular sample to have 10 M elements
+			u_int64_t stepb =  nelem  / 10000000;
+			if(stepb==0) stepb=1;
+			auto data_iterator = file_binary("keyfile");
+			u_int64_t cpt = 0;
+			nb_in_bench_file = 0;
+			for (auto const& key: data_iterator) {
+				if( (cpt % stepb) == 0)
+				{
+					fwrite(&key, sizeof(u_int64_t), 1, bench_file);
+					nb_in_bench_file ++;
+				}
+				cpt++;
+			}
+			
+		}
+		
+		
 	}
 	
 	
@@ -353,7 +423,7 @@ int main (int argc, char* argv[])
 		
 		if(bench_lookup)
 		{
-				auto data_iterator = file_binary("keyfile");
+				auto data_iterator = file_binary("benchfile");
 				
 				u_int64_t dumb=0;
 			
@@ -365,7 +435,7 @@ int main (int argc, char* argv[])
 				}
 				end = clock();
 
-				printf("Buckets BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem,dumb);
+				printf("Buckets BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nb_in_bench_file, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nb_in_bench_file,dumb);
 		}
 	
 		
@@ -478,8 +548,7 @@ int main (int argc, char* argv[])
 	{
 		u_int64_t nb_collision_detected = 0;
 		u_int64_t range_problems = 0;
-		char * check_table = (char * ) calloc(nelem,sizeof(char));
-
+		boomphf::bitVector check_table (nelem);
 		for (u_int64_t i = 0; i < nelem; i++)
 		{
 			mphf_value = bphf->lookup(data[i]);
@@ -489,7 +558,7 @@ int main (int argc, char* argv[])
 			}
 			if(check_table[mphf_value]==0)
 			{
-				check_table[mphf_value]=1;
+				check_table.set(mphf_value);
 			}
 			else
 			{
@@ -508,7 +577,6 @@ int main (int argc, char* argv[])
 			return EXIT_FAILURE;
 		}
 
-		free(check_table);
 	}
 
 	if(bench_lookup && ! from_disk)
@@ -531,25 +599,56 @@ int main (int argc, char* argv[])
 	
 	if(bench_lookup &&  from_disk)
 	{
+			auto data_iterator = file_binary("benchfile");
 
-			auto data_iterator = file_binary("keyfile");
-			
-			u_int64_t dumb=0;
-			begin = clock();
-			
-			for (auto const& key: data_iterator) {
-				mphf_value = bphf->lookup(key);
+		//copy sample in ram
+		u_int64_t * sample = (u_int64_t * )  malloc(nb_in_bench_file*sizeof(u_int64_t));
+		u_int64_t ii =0;
+		for (auto const& key: data_iterator) {
+			sample[ii++] = key;
+		}
+
+		printf("bench lookups \n");
+		//bench procedure taken from emphf
+		stats_accumulator stats;
+		double tick = get_time_usecs();
+		size_t lookups = 0;
+		static const size_t lookups_per_sample = 1 << 16;
+		u_int64_t dumb=0;
+		double elapsed;
+		size_t runs = 10;
+		
+		for (size_t run = 0; run < runs; ++run) {
+			for (size_t ii = 0; ii < nb_in_bench_file; ++ii) {
+
+				mphf_value = bphf->lookup(sample[ii]);
 				//do some silly work
 				dumb+= mphf_value;
+				
+				if (++lookups == lookups_per_sample) {
+					elapsed = get_time_usecs() - tick;
+					stats.add(elapsed / (double)lookups);
+					tick = get_time_usecs();
+					lookups = 0;
+				}
 			}
-			end = clock();
-			printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem,dumb);
-
+		}
+		printf("BBhash bench lookups average %.2f ns +- stddev  %.2f %%   (fingerprint %llu)  \n", 1000.0*stats.mean(),stats.relative_stddev(),dumb);
+		
+		free(sample);
 	}
 	
 	if(!from_disk){
 		free(data);
 	}
 
+	delete bphf;
 	return EXIT_SUCCESS;
 }
+
+
+
+
+
+
+
