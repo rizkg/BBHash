@@ -252,8 +252,7 @@ int check_mphf_correctness (phf_t * bphf, Range input_range)
 		u_int64_t nb_collision_detected = 0;
 		u_int64_t range_problems = 0;
 		u_int64_t mphf_value;
-		char * check_table = (char * ) calloc(nelem,sizeof(char));
-		
+			boomphf::bitVector check_table (nelem);
 		//auto data_iterator = file_binary("keyfile");
 		
 		for (auto const& val: input_range)
@@ -265,7 +264,7 @@ int check_mphf_correctness (phf_t * bphf, Range input_range)
 			}
 			if(check_table[mphf_value]==0)
 			{
-				check_table[mphf_value]=1;
+				check_table.set(mphf_value);
 			}
 			else
 			{
@@ -274,8 +273,7 @@ int check_mphf_correctness (phf_t * bphf, Range input_range)
 			}
 		}
 		
-		free(check_table);
-		
+	
 		
 		if(nb_collision_detected ==  0 && range_problems ==0)
 		{
@@ -541,7 +539,6 @@ int main (int argc, char* argv[])
 	output_filename = "saved_mphf";
 	boophf_t * bphf = NULL;;
 
-	bucketMPHF<u_int64_t> * bucket_bphf = NULL;
 	
 	clock_t begin, end;
 	double t_begin,t_end; struct timeval timet;
@@ -549,38 +546,31 @@ int main (int argc, char* argv[])
 	if(!load_mphf){
 		printf("Construct a BooPHF with  %lli elements  \n",nelem);
 		///create the boophf
-
+		
 		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
-
+		
 		//MPHF CREATION
 		if(from_disk)
 		{
 			auto data_iterator = file_binary("keyfile");
-			if(!buckets)
-				bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
-			else
-				bucket_bphf = new bucketMPHF<u_int64_t>(nelem,data_iterator,nthreads,nBuckets);
-	
+			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
+			
+			
 		}
 		else
 		{
 			auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
 			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
 		}
-
+		
 		gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
-
+		
 		double elapsed = t_end - t_begin;
-
-		if(!buckets)
-		{
-			printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
-			printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
-		}
-		else
-		{
-			printf("BooPHF constructed perfect hash for %llu keys in %.2fs  with %i buckets\n", nelem,elapsed,nBuckets);
-		}
+		
+		
+		printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
+		printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+		
 	}
 	else{
 		//assumes the mphf was saved before, reload it
@@ -636,9 +626,7 @@ int main (int argc, char* argv[])
 	if(!from_disk){
 		free(data);
 	}
-	if(buckets)
-		delete bucket_bphf;
-	else
+
 		delete bphf;
 
 	return EXIT_SUCCESS;
