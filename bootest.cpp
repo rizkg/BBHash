@@ -14,6 +14,8 @@
 #include <thread>
 #include <math.h>
 
+
+
 //#include <chrono>
 
 
@@ -21,6 +23,8 @@ u_int64_t *data;
 
 
 using namespace std;
+
+
 
 //uncomment to check correctness of the func
 //#define CHECK_MPHF
@@ -30,12 +34,6 @@ using namespace std;
 #define srandomdev() srand((unsigned) time(NULL))
 
 
-uint64_t korenXor(uint64_t x){
-	x ^= (x << 21);
-	x ^= (x >> 35);
-	x ^= (x << 4);
-	return x;
-}
 
 inline double get_time_usecs() {
 	struct timeval tv;
@@ -58,6 +56,7 @@ uint64_t random64 ()
 
 typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
 typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
+
 
 
 // iterator from disk file of u_int64_t with buffered read,   todo template
@@ -214,26 +213,128 @@ private:
 
 
 
+
+
 //PARAMETERS
 u_int64_t nelem = 1000*1000;
 uint nthreads = 1; //warning must be a divisor of nBuckets
 double gammaFactor = 1.0;
+u_int64_t nb_in_bench_file;
+
+
+uint64_t korenXor(uint64_t x){
+	x ^= (x << 21);
+	x ^= (x >> 35);
+	x ^= (x << 4);
+	return x;
+}
+
+
 uint nBuckets = 96;
 vector<FILE*> vFiles(nBuckets);
 vector<uint> elinbuckets(nBuckets);
 vector<boophf_t*> MPHFs(nBuckets);
-u_int64_t nb_in_bench_file;
 
 
 void compactBucket(uint start, uint n ){
 	for(uint i(start);i<start+n;++i){
-
+		
 		auto data_iterator = file_binary(("bucket"+to_string(i)).c_str());
 		
 		MPHFs[i]= new boomphf::mphf<u_int64_t,hasher_t>(elinbuckets[i],data_iterator,1,gammaFactor,false);
-
+		
 	}
 }
+
+template <typename phf_t,typename Range>
+int check_mphf_correctness (phf_t * bphf, Range input_range)
+{
+		u_int64_t nb_collision_detected = 0;
+		u_int64_t range_problems = 0;
+		u_int64_t mphf_value;
+		char * check_table = (char * ) calloc(nelem,sizeof(char));
+		
+		//auto data_iterator = file_binary("keyfile");
+		
+		for (auto const& val: input_range)
+		{
+			mphf_value = bphf->lookup(val);
+			if(mphf_value>=nelem)
+			{
+				range_problems++;
+			}
+			if(check_table[mphf_value]==0)
+			{
+				check_table[mphf_value]=1;
+			}
+			else
+			{
+				printf("collision for val %lli \n",mphf_value);
+				nb_collision_detected++;
+			}
+		}
+		
+		free(check_table);
+		
+		
+		if(nb_collision_detected ==  0 && range_problems ==0)
+		{
+			printf(" --- boophf working correctly --- \n");
+			return 0;
+			
+		}
+		else
+		{
+			printf("!!! problem, %llu collisions detected; %llu out of range !!!\n",nb_collision_detected,range_problems);
+			return 1;
+			
+		}
+}
+
+template <typename phf_t,typename Range>
+void bench_mphf_lookup (phf_t * bphf, Range input_range)
+{
+	
+
+	vector<u_int64_t> sample;
+	u_int64_t mphf_value;
+
+	//copy sample in ram
+	for (auto const& key: input_range) {
+		sample.push_back(key);
+	}
+	
+	printf("bench lookups  sample size %lu \n",sample.size());
+	//bench procedure taken from emphf
+	stats_accumulator stats;
+	double tick = get_time_usecs();
+	size_t lookups = 0;
+	static const size_t lookups_per_sample = 1 << 16;
+	u_int64_t dumb=0;
+	double elapsed;
+	size_t runs = 10;
+	
+	for (size_t run = 0; run < runs; ++run) {
+		for (size_t ii = 0; ii < sample.size(); ++ii) {
+			
+			mphf_value = bphf->lookup(sample[ii]);
+			//do some silly work
+			dumb+= mphf_value;
+			
+			if (++lookups == lookups_per_sample) {
+				elapsed = get_time_usecs() - tick;
+				stats.add(elapsed / (double)lookups);
+				tick = get_time_usecs();
+				lookups = 0;
+			}
+		}
+	}
+	printf("BBhash bench lookups average %.2f ns +- stddev  %.2f %%   (fingerprint %llu)  \n", 1000.0*stats.mean(),stats.relative_stddev(),dumb);
+	
+}
+
+
+//#include "bucketing.h"
 
 
 int main (int argc, char* argv[])
@@ -287,7 +388,7 @@ int main (int argc, char* argv[])
 	
 	uint64_t ii, jj;
 
-	//generation of keys
+	/////  generation of keys
 	if(!from_disk && !buckets){
 		uint64_t rab = 100;
 		
@@ -315,13 +416,10 @@ int main (int argc, char* argv[])
 		u_int64_t step = ULLONG_MAX / nelem;
 		u_int64_t current = 0;
 		fwrite(&current, sizeof(u_int64_t), 1, key_file);
-		//printf("from disk  nelem %lli  step %llu \n",nelem,step);
 		for (u_int64_t i = 1; i < nelem; i++)
 		{
 			current = current + step;
 			fwrite(&current, sizeof(u_int64_t), 1, key_file);
-			//printf("writing  %llu\n", current);
-
 		}
 		fclose(key_file);
 		printf("key file generated \n");
@@ -335,24 +433,20 @@ int main (int argc, char* argv[])
 			if(stepb==0) stepb=1;
 			auto data_iterator = file_binary("keyfile");
 			u_int64_t cpt = 0;
-			nb_in_bench_file = 0;
+			nb_in_bench_file=0;
 			for (auto const& key: data_iterator) {
 				if( (cpt % stepb) == 0)
 				{
 					fwrite(&key, sizeof(u_int64_t), 1, bench_file);
-					nb_in_bench_file ++;
+					nb_in_bench_file++;
 				}
 				cpt++;
 			}
-			
 		}
-		
-		
 	}
 	
 	
 	vector<uint> nb_elem_in_previous_buckets (nBuckets);
-
 	
 	if(buckets){
 		clock_t begin, end;
@@ -387,15 +481,15 @@ int main (int argc, char* argv[])
 			threads.push_back(thread(compactBucket,n*nBuckets/nthreads,nBuckets/nthreads));
 		}
 		for(auto &t : threads){t.join();}
-
+		
 		for(uint i(0);i<nBuckets;++i){
 			fclose(vFiles[i]);
 			remove(("bucket"+to_string(i)).c_str());
 		}
 		gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
-
+		
 		double elapsed = t_end - t_begin;
-
+		
 		printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
 		// cin.get();
 		
@@ -416,45 +510,44 @@ int main (int argc, char* argv[])
 				}
 			}
 			printf("there is %llu problems\n", range_problems);
-
+			
 			end = clock();
 			printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem);
 		}
 		
 		if(bench_lookup)
 		{
-				auto data_iterator = file_binary("benchfile");
-				
-				u_int64_t dumb=0;
+			auto data_iterator = file_binary("benchfile");
+			u_int64_t dumb=0;
+			begin = clock();
+			for (auto const& key: data_iterator) {
+				uint64_t hash=korenXor(key)%nBuckets;
+				u_int64_t mphf_value = MPHFs[hash]->lookup(key)+  nb_elem_in_previous_buckets [hash];
+				dumb+= mphf_value;
+			}
+			end = clock();
 			
-				begin = clock();
-				for (auto const& key: data_iterator) {
-					uint64_t hash=korenXor(key)%nBuckets;
-					u_int64_t mphf_value = MPHFs[hash]->lookup(key)+  nb_elem_in_previous_buckets [hash];
-					dumb+= mphf_value;
-				}
-				end = clock();
-
-				printf("Buckets BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nb_in_bench_file, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nb_in_bench_file,dumb);
+			printf("Buckets BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nb_in_bench_file, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nb_in_bench_file,dumb);
 		}
-	
+		
 		
 		
 		return EXIT_SUCCESS;
 	}
-
-
+ 
+	
 
 	std::string output_filename;
 	output_filename = "saved_mphf";
-	boophf_t * bphf;
+	boophf_t * bphf = NULL;;
 
+	bucketMPHF<u_int64_t> * bucket_bphf = NULL;
+	
 	clock_t begin, end;
 	double t_begin,t_end; struct timeval timet;
 
 	if(!load_mphf){
 		printf("Construct a BooPHF with  %lli elements  \n",nelem);
-//(%lli MB for holding elems in ram)  ,nelem*sizeof(u_int64_t)/1024LL/1024LL
 		///create the boophf
 
 		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
@@ -463,7 +556,11 @@ int main (int argc, char* argv[])
 		if(from_disk)
 		{
 			auto data_iterator = file_binary("keyfile");
-			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
+			if(!buckets)
+				bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
+			else
+				bucket_bphf = new bucketMPHF<u_int64_t>(nelem,data_iterator,nthreads,nBuckets);
+	
 		}
 		else
 		{
@@ -475,9 +572,15 @@ int main (int argc, char* argv[])
 
 		double elapsed = t_end - t_begin;
 
-		printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
-
-		printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+		if(!buckets)
+		{
+			printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
+			printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+		}
+		else
+		{
+			printf("BooPHF constructed perfect hash for %llu keys in %.2fs  with %i buckets\n", nelem,elapsed,nBuckets);
+		}
 	}
 	else{
 		//assumes the mphf was saved before, reload it
@@ -504,145 +607,40 @@ int main (int argc, char* argv[])
 		bphf->save(os);
 	}
 
-	u_int64_t mphf_value;
 
-	if(check_correctness  && from_disk)
+	if(check_correctness && from_disk )
 	{
-		u_int64_t nb_collision_detected = 0;
-		u_int64_t range_problems = 0;
-		char * check_table = (char * ) calloc(nelem,sizeof(char));
-
 		auto data_iterator = file_binary("keyfile");
-
-		for (auto const& val: data_iterator)
-		{
-			mphf_value = bphf->lookup(val);
-			if(mphf_value>=nelem)
-			{
-				range_problems++;
-			}
-			if(check_table[mphf_value]==0)
-			{
-				check_table[mphf_value]=1;
-			}
-			else
-			{
-				printf("collision for val %lli \n",mphf_value);
-				nb_collision_detected++;
-			}
-		}
-
-		if(nb_collision_detected ==  0 && range_problems ==0)
-		{
-			printf(" --- boophf working correctly --- \n");
-		}
-		else
-		{
-			printf("!!! problem, %llu collisions detected; %llu out of range !!!\n",nb_collision_detected,range_problems);
-			return EXIT_FAILURE;
-		}
-		free(check_table);
+		check_mphf_correctness(bphf ,data_iterator);
 	}
-
-	if(check_correctness  && !from_disk )	//test the mphf
+	if(check_correctness &&  !from_disk )
 	{
-		u_int64_t nb_collision_detected = 0;
-		u_int64_t range_problems = 0;
-		boomphf::bitVector check_table (nelem);
-		for (u_int64_t i = 0; i < nelem; i++)
-		{
-			mphf_value = bphf->lookup(data[i]);
-			if(mphf_value>=nelem)
-			{
-				range_problems++;
-			}
-			if(check_table[mphf_value]==0)
-			{
-				check_table.set(mphf_value);
-			}
-			else
-			{
-				printf("collision for val %lli \n",mphf_value);
-				nb_collision_detected++;
-			}
-		}
-
-		if(nb_collision_detected ==  0 && range_problems ==0)
-		{
-			printf(" --- boophf working correctly --- \n");
-		}
-		else
-		{
-			printf("!!! problem, %llu collisions detected; %llu out of range !!!\n",nb_collision_detected,range_problems);
-			return EXIT_FAILURE;
-		}
-
+		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
+		check_mphf_correctness(bphf ,data_iterator);
 	}
-
-	if(bench_lookup && ! from_disk)
-	{
-		u_int64_t dumb=0;
-		begin = clock();
-		for (u_int64_t i = 0; i < nelem; i++)
-		{
-			mphf_value = bphf->lookup(data[i]);
-
-			//do some silly work
-			dumb+= mphf_value;
-
-		}
-
-		end = clock();
-		printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem,dumb);
-	}
-
-	
 	if(bench_lookup &&  from_disk)
 	{
-			auto data_iterator = file_binary("benchfile");
-
-		//copy sample in ram
-		u_int64_t * sample = (u_int64_t * )  malloc(nb_in_bench_file*sizeof(u_int64_t));
-		u_int64_t ii =0;
-		for (auto const& key: data_iterator) {
-			sample[ii++] = key;
-		}
-
-		printf("bench lookups \n");
-		//bench procedure taken from emphf
-		stats_accumulator stats;
-		double tick = get_time_usecs();
-		size_t lookups = 0;
-		static const size_t lookups_per_sample = 1 << 16;
-		u_int64_t dumb=0;
-		double elapsed;
-		size_t runs = 10;
+		auto data_iterator = file_binary("benchfile");
 		
-		for (size_t run = 0; run < runs; ++run) {
-			for (size_t ii = 0; ii < nb_in_bench_file; ++ii) {
-
-				mphf_value = bphf->lookup(sample[ii]);
-				//do some silly work
-				dumb+= mphf_value;
-				
-				if (++lookups == lookups_per_sample) {
-					elapsed = get_time_usecs() - tick;
-					stats.add(elapsed / (double)lookups);
-					tick = get_time_usecs();
-					lookups = 0;
-				}
-			}
-		}
-		printf("BBhash bench lookups average %.2f ns +- stddev  %.2f %%   (fingerprint %llu)  \n", 1000.0*stats.mean(),stats.relative_stddev(),dumb);
+		bench_mphf_lookup(bphf,data_iterator);
 		
-		free(sample);
 	}
+	if(bench_lookup &&  !from_disk)
+	{
+		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
+		
+		bench_mphf_lookup(bphf,data_iterator);
+	}
+	
 	
 	if(!from_disk){
 		free(data);
 	}
+	if(buckets)
+		delete bucket_bphf;
+	else
+		delete bphf;
 
-	delete bphf;
 	return EXIT_SUCCESS;
 }
 
