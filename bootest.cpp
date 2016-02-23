@@ -247,7 +247,7 @@ void compactBucket(uint start, uint n ){
 }
 
 template <typename phf_t,typename Range>
-int check_mphf_correctness (phf_t * bphf, Range input_range)
+int check_mphf_correctness (phf_t * bphf, Range const& input_range)
 {
 		u_int64_t nb_collision_detected = 0;
 		u_int64_t range_problems = 0;
@@ -290,7 +290,7 @@ int check_mphf_correctness (phf_t * bphf, Range input_range)
 }
 
 template <typename phf_t,typename Range>
-void bench_mphf_lookup (phf_t * bphf, Range input_range)
+void bench_mphf_lookup (phf_t * bphf, Range const& input_range)
 {
 	
 
