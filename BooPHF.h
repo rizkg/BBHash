@@ -522,7 +522,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			assert(pos<_size);
 			//_bitArray [pos >> 6] |=   (1ULL << (pos & 63) ) ;
 			__sync_fetch_and_or (_bitArray + (pos >> 6ULL), (1ULL << (pos & 63)) );
-
 		}
 
 		//set bit pos to 0
@@ -530,14 +529,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		{
 			//_bitArray [pos >> 6] &=   ~(1ULL << (pos & 63) ) ;
 			__sync_fetch_and_and (_bitArray + (pos >> 6ULL), ~(1ULL << (pos & 63) ));
-
 		}
 
 		//return value of  last rank
 		// add offset to  all ranks  computed
 		uint64_t build_ranks(uint64_t offset =0)
 		{
-
 			_ranks.reserve(2+ _size/_nb_bits_per_rank_sample);
 
 			uint64_t curent_rank = offset;
@@ -676,6 +673,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			{
 				delete _levels[ii];
 			}
+			free(_levels);
 		}
 
 		// allow perc_elem_loaded  elements to be loaded in ram for faster construction (default 3%), set to 0 to desactivate
@@ -843,10 +841,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 							{
 								level_hash = _hasher.next(bbhash);
 							}
-
-
 							insertIntoLevel(level_hash,i); //should be safe
-
 						}
 					}
 
@@ -1089,6 +1084,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			}
 		//	printf("\ngoing to level %i  : %llu elems  %.2f %%  expected : %.2f %% \n",i,_cptLevel,100.0* _cptLevel/(float)_nelem,100.0* pow(_proba_collision,i) );
 
+			delete [] tab_threads;
 		}
 
 	private:
