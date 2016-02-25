@@ -265,7 +265,8 @@ void compactBucket(uint start, uint n){
 
 
 template <typename phf_t,typename Range>
-int check_mphf_correctness (phf_t * bphf, Range const& input_range){
+int check_mphf_correctness (phf_t * bphf, Range const& input_range)
+{
 		u_int64_t nb_collision_detected = 0;
 		u_int64_t range_problems = 0;
 		u_int64_t mphf_value;
@@ -308,7 +309,8 @@ int check_mphf_correctness (phf_t * bphf, Range const& input_range){
 
 
 template <typename phf_t,typename Range>
-void bench_mphf_lookup (phf_t * bphf, Range const& input_range){
+void bench_mphf_lookup (phf_t * bphf, Range const& input_range)
+{
 
 
 	vector<u_int64_t> sample;
@@ -454,6 +456,7 @@ int main (int argc, char* argv[]){
 				}
 				cpt++;
 			}
+			fclose(bench_file);
 		}
 	}
 
@@ -478,6 +481,11 @@ int main (int argc, char* argv[]){
 			fwrite(&key, sizeof(u_int64_t), 1, vFiles[hash]);
 			++elinbuckets[korenXor(key)%(nBuckets*nMphfByBucket)];
 		}
+		
+		for (int ii=0; ii<vFiles.size(); ii++) {
+			fclose(vFiles[ii]);
+		}
+		
 		cout<<"element in keyfile"<<cont<<endl;
 
 		nb_elem_in_previous_buckets[0] = 0 ;
@@ -498,7 +506,6 @@ int main (int argc, char* argv[]){
 		compactBucket(0, nBuckets);
 
 		for(uint i(0);i<nBuckets;++i){
-			fclose(vFiles[i]);
 			remove(("bucket"+to_string(i)).c_str());
 		}
 		gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
