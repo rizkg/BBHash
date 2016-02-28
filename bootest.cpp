@@ -363,7 +363,7 @@ int main (int argc, char* argv[]){
 	bool bench_lookup = false;
 	bool save_mphf = false;
 	bool load_mphf = false;
-	bool buckets = true;
+	bool buckets = false;
 	bool from_disk = true;
 
 	if(argc <3 ){
