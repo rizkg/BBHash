@@ -210,7 +210,7 @@ private:
 //PARAMETERS
 u_int64_t nelem = 1000*1000;
 uint nthreads = 1; //warning must be a divisor of nBuckets
-double gammaFactor = 2.0;
+double gammaFactor = 1.0;
 u_int64_t nb_in_bench_file;
 
 
