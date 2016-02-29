@@ -59,13 +59,15 @@ namespace boomphf {
 		uint64_t todo;
 		int subdiv ; // progress printed every 1/subdiv of total to do
 		double partial;
-		double partial_threaded[64];
-		uint64_t done_threaded[64];
+		int _nthreads;
+		std::vector<double > partial_threaded;
+		std::vector<uint64_t > done_threaded;
 
 		double steps ; //steps = todo/subidv
 
-		void init(uint64_t ntasks, const char * msg)
+		void init(uint64_t ntasks, const char * msg,int nthreads =1)
 		{
+			_nthreads = nthreads;
 			message = std::string(msg);
 			gettimeofday(&timestamp, NULL);
 			heure_debut = timestamp.tv_sec +(timestamp.tv_usec/1000000.0);
@@ -75,8 +77,12 @@ namespace boomphf {
 			todo= ntasks;
 			done = 0;
 			partial =0;
-			for (int ii=0; ii<64;ii++) partial_threaded[ii]=0;
-			for (int ii=0; ii<64;ii++) done_threaded[ii]=0;
+			
+			partial_threaded.resize(_nthreads);
+			done_threaded.resize(_nthreads);
+			
+			for (int ii=0; ii<_nthreads;ii++) partial_threaded[ii]=0;
+			for (int ii=0; ii<_nthreads;ii++) done_threaded[ii]=0;
 			subdiv= 1000;
 			steps = (double)todo / (double)subdiv;
 
@@ -104,8 +110,8 @@ namespace boomphf {
 		{
 			done = 0;
 			double rem = 0;
-			for (int ii=0; ii<64;ii++) done += (done_threaded[ii] );
-			for (int ii=0; ii<64;ii++) partial += (partial_threaded[ii] );
+			for (int ii=0; ii<_nthreads;ii++) done += (done_threaded[ii] );
+			for (int ii=0; ii<_nthreads;ii++) partial += (partial_threaded[ii] );
 
 			finish();
 
@@ -160,7 +166,7 @@ namespace boomphf {
 					gettimeofday(&timet, NULL);
 					now = timet.tv_sec +(timet.tv_usec/1000000.0);
 					uint64_t total_done  = 0;
-					for (int ii=0; ii<64;ii++) total_done += (done_threaded[ii] );
+					for (int ii=0; ii<_nthreads;ii++) total_done += (done_threaded[ii] );
 					double elapsed = now - heure_debut;
 					double speed = total_done / elapsed;
 					double rem = (todo-total_done) / speed;
@@ -412,20 +418,71 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 		bitVector() : _size(0)
 		{
-			_bitArray = NULL;
+			_bitArray = nullptr;
 		}
 
 		bitVector(uint64_t n) : _size(n)
 		{
 			_nchar  = (1ULL+n/64ULL);
-			_bitArray = (uint64_t *) calloc (_nchar,sizeof(uint64_t));
+			_bitArray =  (uint64_t *) calloc (_nchar,sizeof(uint64_t));
 		}
 
 		~bitVector()
 		{
-			free(_bitArray);
+			if(_bitArray != nullptr)
+				free(_bitArray);
 		}
 
+		 //copy constructor
+		 bitVector(bitVector const &r)
+		 {
+
+			 _size =  r._size;
+			 _nchar = r._nchar;
+			 _ranks = r._ranks;
+			 _bitArray = (uint64_t *) calloc (_nchar,sizeof(uint64_t));
+			 memcpy(_bitArray, r._bitArray, _nchar*sizeof(uint64_t) );
+		 }
+		
+		// Copy assignment operator
+		bitVector &operator=(bitVector const &r)
+		{
+			if (&r != this)
+			{
+				_size =  r._size;
+				_nchar = r._nchar;
+				_ranks = r._ranks;
+				if(_bitArray != nullptr)
+					free(_bitArray);
+				_bitArray = (uint64_t *) calloc (_nchar,sizeof(uint64_t));
+				memcpy(_bitArray, r._bitArray, _nchar*sizeof(uint64_t) );
+			}
+			return *this;
+		}
+	
+		// Move assignment operator
+		bitVector &operator=(bitVector &&r)
+		{
+			if (&r != this)
+			{
+				if(_bitArray != nullptr)
+					free(_bitArray);
+				
+				_size =  std::move (r._size);
+				_nchar = std::move (r._nchar);
+				_ranks = std::move (r._ranks);
+				_bitArray = r._bitArray;
+				r._bitArray = nullptr;
+			}
+			return *this;
+		}
+		// Move constructor
+		bitVector(bitVector &&r) : _size(0),_bitArray ( nullptr)
+		{
+			*this = std::move(r);
+		}
+		
+		
 		void resize(uint64_t newsize)
 		{
 			//printf("bitvector resize from  %llu bits to %llu \n",_size,newsize);
@@ -589,7 +646,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 
 	protected:
-		uint64_t* _bitArray;
+		uint64_t*  _bitArray;
+		//uint64_t* _bitArray;
 		uint64_t _size;
 		uint64_t _nchar;
 
@@ -606,23 +664,67 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 	class level{
 	public:
-		level(){ }
+		level(){ bitset = nullptr; }
 
 		~level() {
-			delete bitset;
+			if(bitset!=nullptr)
+				delete bitset;
 		}
 
-		uint64_t idx_begin;
-		uint64_t hash_domain;
-		bitVector * bitset;
-
-
+		
+		//copy constructor
+		level(level const &r)
+		{
+			idx_begin =  r.idx_begin;
+			hash_domain = r.hash_domain;
+			if(r.bitset != nullptr)
+				bitset =  new bitVector (* r.bitset);
+		}
+		// Copy assignment operator
+		level &operator=(level const &r)
+		{
+			if (&r != this)
+			{
+				if(bitset!=nullptr)
+					delete bitset;
+				
+				idx_begin =  r.idx_begin;
+				hash_domain = r.hash_domain;
+				if(r.bitset != nullptr)
+					bitset =  new bitVector (* r.bitset);
+			}
+			return *this;
+		}
+		// Move assignment operator
+		level &operator=(level &&r)
+		{
+			if (&r != this)
+			{
+				if(bitset!=nullptr)
+					delete bitset;
+				
+				idx_begin =  std::move (r.idx_begin);
+				hash_domain = std::move (r.hash_domain);
+				bitset =  r.bitset;
+				r.bitset = nullptr;
+			}
+			return *this;
+		}
+		// Move constructor
+		level(level &&r) : bitset (nullptr)
+		{
+			*this = std::move(r);
+		}
+		
 		uint64_t get(uint64_t hash_raw)
 		{
 			uint64_t hashi =    hash_raw %  hash_domain;
 			return bitset->get(hashi);
 		}
-
+		
+		uint64_t idx_begin;
+		uint64_t hash_domain;
+		bitVector * bitset;  //maybe move this to  bitVector bitset , c++ style
 	};
 
 
@@ -661,7 +763,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		//typedef IndepHashFunctors<elem_t,Hasher_t> MultiHasher_t; //faster than xorshift
 
 	public:
-		mphf()
+		mphf() :_levels(nullptr)
 		{}
 
 
@@ -669,13 +771,104 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		{
 			pthread_mutex_destroy(&_mutex);
 
-			for(int ii=0; ii<_nb_levels; ii++)
+			if(_levels != nullptr)
 			{
-				delete _levels[ii];
+				for(int ii=0; ii<_nb_levels; ii++)
+				{
+					delete _levels[ii];
+				}
+				free(_levels);
 			}
-			free(_levels);
 		}
 
+		
+		//copy constructor
+		mphf(mphf const &r)
+		{
+			_nb_levels = r._nb_levels;
+			_gamma = r._gamma;
+			_nelem = r._nelem;
+			_hash_domain = r._hash_domain;
+			_proba_collision = r._proba_collision;
+			_lastbitsetrank = r._lastbitsetrank;
+			_final_hash = r._final_hash;
+			
+			_levels = (level **) malloc(_nb_levels * sizeof(level *) );
+
+			for(int ii=0; ii<_nb_levels; ii++)
+			{
+				_levels[ii] = new level(r._levels[ii]);
+			}
+			
+		}
+		
+		// Copy assignment operator
+		mphf &operator=(mphf const &r)
+		{
+			if (&r != this)
+			{
+				if(_levels != nullptr)
+				{
+					for(int ii=0; ii<_nb_levels; ii++)
+					{
+						delete _levels[ii];
+					}
+					free(_levels);
+				}
+				
+				_nb_levels = r._nb_levels;
+				_gamma = r._gamma;
+				_nelem = r._nelem;
+				_hash_domain = r._hash_domain;
+				_proba_collision = r._proba_collision;
+				_lastbitsetrank = r._lastbitsetrank;
+				_final_hash = r._final_hash;
+				
+				_levels = (level **) malloc(_nb_levels * sizeof(level *) );
+				
+				for(int ii=0; ii<_nb_levels; ii++)
+				{
+					_levels[ii] = new level(r._levels[ii]);
+				}
+			}
+			return *this;
+		}
+		
+		// Move constructor
+		mphf(mphf &&r)
+		{
+			*this = std::move(r);
+		}
+		
+		// Move assignment operator
+		mphf &operator=(mphf &&r)
+		{
+			if (&r != this)
+			{
+				if(_levels != nullptr)
+				{
+					for(int ii=0; ii<_nb_levels; ii++)
+					{
+						delete _levels[ii];
+					}
+					free(_levels);
+				}
+				_nb_levels = std::move(r._nb_levels);
+				_gamma = std::move(r._gamma);
+				_nelem = std::move(r._nelem);
+				_hash_domain = std::move(r._hash_domain);
+				_proba_collision = std::move(r._proba_collision);
+				_lastbitsetrank = std::move(r._lastbitsetrank);
+				_final_hash = std::move(r._final_hash);
+				
+				_levels = r._levels;
+				r._levels = nullptr;
+			}
+			return *this;
+		}
+		
+		
+		
 		// allow perc_elem_loaded  elements to be loaded in ram for faster construction (default 3%), set to 0 to desactivate
 		template <typename Range>
 		mphf( size_t n, Range const& input_range,int num_thread = 1,  double gamma = 2.0 , bool progress =true, float perc_elem_loaded = 0.03) :
@@ -693,7 +886,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			_progressBar.timer_mode=1;
 
 			if(_fastmode)
-				_progressBar.init( _nelem * (_fastModeLevel+1) +  ( _nelem * pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))    ,"Building BooPHF");
+				_progressBar.init( _nelem * (_fastModeLevel+1) +  ( _nelem * pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))    ,"Building BooPHF",num_thread);
 			else
 				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF");
 			}
@@ -948,7 +1141,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			if(_fastmode)
 				setLevelFastmode.resize(_percent_elem_loaded_for_fastMode * (double)_nelem );
 
-			_proba_collision = 1.0 -  pow(((_gamma*_nelem -1 ) / (float)(_gamma*_nelem)),_nelem-1);
+			_proba_collision = 1.0 -  pow(((_gamma*_nelem -1 ) / (double)(_gamma*_nelem)),_nelem-1);
 
 			double sum_geom =_gamma * ( 1.0 +  _proba_collision / (1.0 - _proba_collision));
 			// printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
