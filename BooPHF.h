@@ -436,7 +436,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		 //copy constructor
 		 bitVector(bitVector const &r)
 		 {
-
 			 _size =  r._size;
 			 _nchar = r._nchar;
 			 _ranks = r._ranks;
@@ -769,7 +768,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 		~mphf()
 		{
-			pthread_mutex_destroy(&_mutex);
+
 
 			if(_levels != nullptr)
 			{
@@ -915,6 +914,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 			std::vector<elem_t>().swap(setLevelFastmode);   // clear setLevelFastmode reallocating
 
+
+			pthread_mutex_destroy(&_mutex);
 		}
 
 
