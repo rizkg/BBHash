@@ -59,13 +59,15 @@ namespace boomphf {
 		uint64_t todo;
 		int subdiv ; // progress printed every 1/subdiv of total to do
 		double partial;
-		double partial_threaded[64];
-		uint64_t done_threaded[64];
+		int _nthreads;
+		std::vector<double > partial_threaded;
+		std::vector<uint64_t > done_threaded;
 
 		double steps ; //steps = todo/subidv
 
-		void init(uint64_t ntasks, const char * msg)
+		void init(uint64_t ntasks, const char * msg,int nthreads =1)
 		{
+			_nthreads = nthreads;
 			message = std::string(msg);
 			gettimeofday(&timestamp, NULL);
 			heure_debut = timestamp.tv_sec +(timestamp.tv_usec/1000000.0);
@@ -75,8 +77,12 @@ namespace boomphf {
 			todo= ntasks;
 			done = 0;
 			partial =0;
-			for (int ii=0; ii<64;ii++) partial_threaded[ii]=0;
-			for (int ii=0; ii<64;ii++) done_threaded[ii]=0;
+			
+			partial_threaded.resize(_nthreads);
+			done_threaded.resize(_nthreads);
+			
+			for (int ii=0; ii<_nthreads;ii++) partial_threaded[ii]=0;
+			for (int ii=0; ii<_nthreads;ii++) done_threaded[ii]=0;
 			subdiv= 1000;
 			steps = (double)todo / (double)subdiv;
 
@@ -104,8 +110,8 @@ namespace boomphf {
 		{
 			done = 0;
 			double rem = 0;
-			for (int ii=0; ii<64;ii++) done += (done_threaded[ii] );
-			for (int ii=0; ii<64;ii++) partial += (partial_threaded[ii] );
+			for (int ii=0; ii<_nthreads;ii++) done += (done_threaded[ii] );
+			for (int ii=0; ii<_nthreads;ii++) partial += (partial_threaded[ii] );
 
 			finish();
 
@@ -160,7 +166,7 @@ namespace boomphf {
 					gettimeofday(&timet, NULL);
 					now = timet.tv_sec +(timet.tv_usec/1000000.0);
 					uint64_t total_done  = 0;
-					for (int ii=0; ii<64;ii++) total_done += (done_threaded[ii] );
+					for (int ii=0; ii<_nthreads;ii++) total_done += (done_threaded[ii] );
 					double elapsed = now - heure_debut;
 					double speed = total_done / elapsed;
 					double rem = (todo-total_done) / speed;
@@ -880,7 +886,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			_progressBar.timer_mode=1;
 
 			if(_fastmode)
-				_progressBar.init( _nelem * (_fastModeLevel+1) +  ( _nelem * pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))    ,"Building BooPHF");
+				_progressBar.init( _nelem * (_fastModeLevel+1) +  ( _nelem * pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))    ,"Building BooPHF",num_thread);
 			else
 				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF");
 			}
