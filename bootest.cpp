@@ -222,8 +222,8 @@ uint64_t korenXor(uint64_t x){
 }
 
 
-uint nBuckets = 1;
-uint nMphfByBucket(2);
+uint nBuckets = 64;
+uint nMphfByBucket(64);
 vector<FILE*> vFiles(nBuckets);
 vector<uint> elinbuckets(nBuckets*nMphfByBucket);
 vector<boophf_t*> MPHFs(nBuckets*nMphfByBucket);
@@ -231,7 +231,6 @@ vector<boophf_t*> MPHFs(nBuckets*nMphfByBucket);
 
 void multipleMPHF(const vector<vector<u_int64_t>>& datas, uint start, uint n,uint bucketNum){
 	for(uint ii(start);ii<start+n;++ii){
-		cout<<datas[ii].size()<<endl;
 		auto data_iterator2 = boomphf::range(static_cast<const u_int64_t*>(&datas[ii][0]), static_cast<const u_int64_t*>(&datas[ii][0]+datas[ii].size()));
 		MPHFs[bucketNum*nMphfByBucket+ii]= new boomphf::mphf<u_int64_t,hasher_t>(datas[ii].size(),data_iterator2,1,gammaFactor,false);
 	}
@@ -239,25 +238,25 @@ void multipleMPHF(const vector<vector<u_int64_t>>& datas, uint start, uint n,uin
 
 
 void compactBucket(uint start, uint n){
-	//TODO here read the iterator, put the key into M vectors according to the hash, create M iterator and launch M mphfs (in paralell)
+	//foreach bucket
 	for(uint i(start);i<start+n;++i){
 		auto data_iterator = file_binary(("bucket"+to_string(i)).c_str());
 		vector<vector<u_int64_t>> datas(nMphfByBucket);
+
 		for(uint ireserve(0);ireserve<nMphfByBucket;++ireserve){
-			cout<<"el"<<elinbuckets[i*nMphfByBucket+ireserve]<<endl;
 			datas[ireserve].reserve(elinbuckets[i*nMphfByBucket+ireserve]);
 		}
-		int cont(0);
+
+		// we put element in memory
 		for(auto it(data_iterator.begin());it!=data_iterator.end();++it){
-			cont++;
-			datas[(korenXor(*it)%(nMphfByBucket*nBuckets))/nBuckets].push_back(*it);
+			datas[(korenXor(*it)%(nMphfByBucket))].push_back(*it);
 		}
-		cout<<"cont "<<cont<<endl;
+
 		vector<thread> threads;
 		for(uint tn(0);tn<nthreads;++tn){
 			threads.push_back(thread(multipleMPHF,datas,tn*(nMphfByBucket/nthreads),nMphfByBucket/nthreads,i));
 		}
-		threads.push_back(thread(multipleMPHF,datas,(nthreads)*(nMphfByBucket/nthreads),nMphfByBucket-(nthreads)*(nMphfByBucket/nthreads),i));
+		// threads.push_back(thread(multipleMPHF,datas,(nthreads)*(nMphfByBucket/nthreads),nMphfByBucket-(nthreads)*(nMphfByBucket/nthreads),i));
 
 		for(auto &t : threads){t.join();}
 	}
@@ -265,8 +264,7 @@ void compactBucket(uint start, uint n){
 
 
 template <typename phf_t,typename Range>
-int check_mphf_correctness (phf_t * bphf, Range const& input_range)
-{
+int check_mphf_correctness (phf_t * bphf, Range const& input_range){
 		u_int64_t nb_collision_detected = 0;
 		u_int64_t range_problems = 0;
 		u_int64_t mphf_value;
@@ -309,8 +307,7 @@ int check_mphf_correctness (phf_t * bphf, Range const& input_range)
 
 
 template <typename phf_t,typename Range>
-void bench_mphf_lookup (phf_t * bphf, Range const& input_range)
-{
+void bench_mphf_lookup (phf_t * bphf, Range const& input_range){
 
 
 	vector<u_int64_t> sample;
@@ -428,8 +425,8 @@ int main (int argc, char* argv[]){
 	else{
 		//methode simple pas besoin de  de-dupliquer, mais pas "random"
 		u_int64_t step = ULLONG_MAX / nelem;
+		// u_int64_t step = 100 / nelem;
 		u_int64_t current = 0;
-		fwrite(&current, sizeof(u_int64_t), 1, key_file);
 		for (u_int64_t i = 1; i < nelem; i++)
 		{
 			current = current + step;
@@ -474,19 +471,15 @@ int main (int argc, char* argv[]){
 
 		printf("splitting keys ..\n");
 		auto data_iterator = file_binary("keyfile");
-		int cont(0);
 		for (auto const& key: data_iterator) {
-			cont++;
-			u_int64_t hash=korenXor(key)%nBuckets;
+			u_int64_t hash=(korenXor(key)%(nBuckets*nMphfByBucket)/nBuckets);
 			fwrite(&key, sizeof(u_int64_t), 1, vFiles[hash]);
 			++elinbuckets[korenXor(key)%(nBuckets*nMphfByBucket)];
 		}
-		
+
 		for (int ii=0; ii<vFiles.size(); ii++) {
 			fclose(vFiles[ii]);
 		}
-		
-		cout<<"element in keyfile"<<cont<<endl;
 
 		nb_elem_in_previous_buckets[0] = 0 ;
 		for(int ii=1; ii<nBuckets*nMphfByBucket; ii++ ){
@@ -519,19 +512,30 @@ int main (int argc, char* argv[]){
 			u_int64_t step2 = ULLONG_MAX / nelem;
 			u_int64_t current2 = 0;
 			u_int64_t range_problems(0);
+			u_int64_t nb_collision_detected(0);
 			begin = clock();
 			for (u_int64_t i = 0; i < nelem; i++){
-				current2 += step2;
-				// cout<<current2<<endl;
+
 				uint64_t hash=korenXor(current2)%(nBuckets*nMphfByBucket);
 				u_int64_t mphf_value = MPHFs[hash]->lookup(current2)+  nb_elem_in_previous_buckets [hash];
-				// cout<<mphf_value<<endl;
+				boomphf::bitVector check_table (nelem);
 				if(mphf_value>=nelem){
 					range_problems++;
 					printf("there is %llu problems \n", range_problems);
 				}
+				if(check_table[mphf_value]==0)
+				{
+					check_table.set(mphf_value);
+				}
+				else
+				{
+					printf("collision for val %lli \n",mphf_value);
+					nb_collision_detected++;
+				}
+				current2 += step2;
 			}
 			printf("there is %llu problems\n", range_problems);
+			printf("there is %llu coll\n", nb_collision_detected);
 
 			end = clock();
 			printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem);
@@ -578,8 +582,6 @@ int main (int argc, char* argv[]){
 		{
 			auto data_iterator = file_binary("keyfile");
 			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
-
-
 		}
 		else
 		{
