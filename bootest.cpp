@@ -222,8 +222,8 @@ uint64_t korenXor(uint64_t x){
 }
 
 
-uint nBuckets = 64;
-uint nMphfByBucket(64);
+uint nBuckets = 96;
+uint nMphfByBucket(96);
 vector<FILE*> vFiles(nBuckets);
 vector<uint> elinbuckets(nBuckets*nMphfByBucket);
 vector<boophf_t*> MPHFs(nBuckets*nMphfByBucket);
@@ -472,7 +472,7 @@ int main (int argc, char* argv[]){
 		printf("splitting keys ..\n");
 		auto data_iterator = file_binary("keyfile");
 		for (auto const& key: data_iterator) {
-			u_int64_t hash=(korenXor(key)%(nBuckets*nMphfByBucket)/nBuckets);
+			u_int64_t hash=(korenXor(key)%(nBuckets*nMphfByBucket)/nMphfByBucket);
 			fwrite(&key, sizeof(u_int64_t), 1, vFiles[hash]);
 			++elinbuckets[korenXor(key)%(nBuckets*nMphfByBucket)];
 		}
