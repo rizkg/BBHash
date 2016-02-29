@@ -427,10 +427,10 @@ int main (int argc, char* argv[]){
 		u_int64_t step = ULLONG_MAX / nelem;
 		// u_int64_t step = 100 / nelem;
 		u_int64_t current = 0;
-		for (u_int64_t i = 1; i < nelem; i++)
+		for (u_int64_t i = 0; i < nelem; i++)
 		{
-			current = current + step;
 			fwrite(&current, sizeof(u_int64_t), 1, key_file);
+			current = current + step;
 		}
 		fclose(key_file);
 		printf("key file generated \n");
