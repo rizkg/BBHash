@@ -226,13 +226,13 @@ uint nBuckets = 96;
 uint nMphfByBucket(96);
 vector<FILE*> vFiles(nBuckets);
 vector<uint> elinbuckets(nBuckets*nMphfByBucket);
-vector<boophf_t*> MPHFs(nBuckets*nMphfByBucket);
+vector<boophf_t> MPHFs(nBuckets*nMphfByBucket);
 
 
 void multipleMPHF(const vector<vector<u_int64_t>>& datas, uint start, uint n,uint bucketNum){
 	for(uint ii(start);ii<start+n;++ii){
 		auto data_iterator2 = boomphf::range(static_cast<const u_int64_t*>(&datas[ii][0]), static_cast<const u_int64_t*>(&datas[ii][0]+datas[ii].size()));
-		MPHFs[bucketNum*nMphfByBucket+ii]= new boomphf::mphf<u_int64_t,hasher_t>(datas[ii].size(),data_iterator2,1,gammaFactor,false);
+		MPHFs[bucketNum*nMphfByBucket+ii]=  boomphf::mphf<u_int64_t,hasher_t>(datas[ii].size(),data_iterator2,1,gammaFactor,false);
 	}
 }
 
@@ -460,21 +460,41 @@ int main (int argc, char* argv[]){
 
 	vector<uint> nb_elem_in_previous_buckets (nBuckets*nMphfByBucket);
 
+	
 	if(buckets){
 		clock_t begin, end;
 		double t_begin,t_end; struct timeval timet;
 		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 
+		
 		for(uint i(0);i<nBuckets;++i){
 			vFiles[i]=fopen(("bucket"+to_string(i)).c_str(),"w+");
 		}
 
 		printf("splitting keys ..\n");
+		
+		int buffsize = 10000;
+		vector < vector<u_int64_t> > buffers (nBuckets);
+		for(int ii=0; ii<nBuckets;ii++)
+			buffers[ii].reserve(buffsize);
+		
 		auto data_iterator = file_binary("keyfile");
 		for (auto const& key: data_iterator) {
 			u_int64_t hash=(korenXor(key)%(nBuckets*nMphfByBucket)/nMphfByBucket);
-			fwrite(&key, sizeof(u_int64_t), 1, vFiles[hash]);
+			
+			if(buffers[hash].size()==buffsize)
+			{
+				fwrite(buffers[hash].data(), sizeof(u_int64_t), buffers[hash].size(), vFiles[hash]);
+				buffers[hash].clear();//hope it keeps capacity intact
+			}
+			buffers[hash].push_back(key);
+			
 			++elinbuckets[korenXor(key)%(nBuckets*nMphfByBucket)];
+		}
+		//flush buffers
+		for(int ii=0; ii<nBuckets;ii++)
+		{
+			fwrite(buffers[ii].data(), sizeof(u_int64_t), buffers[ii].size(), vFiles[ii]);
 		}
 
 		for (int ii=0; ii<vFiles.size(); ii++) {
@@ -514,11 +534,11 @@ int main (int argc, char* argv[]){
 			u_int64_t range_problems(0);
 			u_int64_t nb_collision_detected(0);
 			begin = clock();
+			boomphf::bitVector check_table (nelem);
 			for (u_int64_t i = 0; i < nelem; i++){
 
 				uint64_t hash=korenXor(current2)%(nBuckets*nMphfByBucket);
-				u_int64_t mphf_value = MPHFs[hash]->lookup(current2)+  nb_elem_in_previous_buckets [hash];
-				boomphf::bitVector check_table (nelem);
+				u_int64_t mphf_value = MPHFs[hash].lookup(current2)+  nb_elem_in_previous_buckets [hash];
 				if(mphf_value>=nelem){
 					range_problems++;
 					printf("there is %llu problems \n", range_problems);
@@ -538,7 +558,7 @@ int main (int argc, char* argv[]){
 			printf("there is %llu coll\n", nb_collision_detected);
 
 			end = clock();
-			printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem);
+			//printf("BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup \n", nelem, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nelem);
 		}
 
 		if(bench_lookup)
@@ -548,7 +568,7 @@ int main (int argc, char* argv[]){
 			begin = clock();
 			for (auto const& key: data_iterator) {
 				uint64_t hash=korenXor(key)%(nBuckets*nMphfByBucket);
-				u_int64_t mphf_value = MPHFs[hash]->lookup(key)+  nb_elem_in_previous_buckets [hash];
+				u_int64_t mphf_value = MPHFs[hash].lookup(key) +  nb_elem_in_previous_buckets [hash];
 				dumb+= mphf_value;
 			}
 			end = clock();
