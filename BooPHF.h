@@ -462,6 +462,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		// Move assignment operator
 		bitVector &operator=(bitVector &&r)
 		{
+			//printf("bitVector move assignment \n");
 			if (&r != this)
 			{
 				if(_bitArray != nullptr)
@@ -663,67 +664,20 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 	class level{
 	public:
-		level(){ bitset = nullptr; }
+		level(){ }
 
 		~level() {
-			if(bitset!=nullptr)
-				delete bitset;
 		}
 
-		
-		//copy constructor
-		level(level const &r)
-		{
-			idx_begin =  r.idx_begin;
-			hash_domain = r.hash_domain;
-			if(r.bitset != nullptr)
-				bitset =  new bitVector (* r.bitset);
-		}
-		// Copy assignment operator
-		level &operator=(level const &r)
-		{
-			if (&r != this)
-			{
-				if(bitset!=nullptr)
-					delete bitset;
-				
-				idx_begin =  r.idx_begin;
-				hash_domain = r.hash_domain;
-				if(r.bitset != nullptr)
-					bitset =  new bitVector (* r.bitset);
-			}
-			return *this;
-		}
-		// Move assignment operator
-		level &operator=(level &&r)
-		{
-			if (&r != this)
-			{
-				if(bitset!=nullptr)
-					delete bitset;
-				
-				idx_begin =  std::move (r.idx_begin);
-				hash_domain = std::move (r.hash_domain);
-				bitset =  r.bitset;
-				r.bitset = nullptr;
-			}
-			return *this;
-		}
-		// Move constructor
-		level(level &&r) : bitset (nullptr)
-		{
-			*this = std::move(r);
-		}
-		
 		uint64_t get(uint64_t hash_raw)
 		{
 			uint64_t hashi =    hash_raw %  hash_domain;
-			return bitset->get(hashi);
+			return bitset.get(hashi);
 		}
 		
 		uint64_t idx_begin;
 		uint64_t hash_domain;
-		bitVector * bitset;  //maybe move this to  bitVector bitset , c++ style
+		bitVector  bitset;
 	};
 
 
@@ -762,111 +716,15 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		//typedef IndepHashFunctors<elem_t,Hasher_t> MultiHasher_t; //faster than xorshift
 
 	public:
-		mphf() :_levels(nullptr)
+		mphf()
 		{}
 
 
 		~mphf()
 		{
 
-
-			if(_levels != nullptr)
-			{
-				for(int ii=0; ii<_nb_levels; ii++)
-				{
-					delete _levels[ii];
-				}
-				free(_levels);
-			}
 		}
 
-		
-		//copy constructor
-		mphf(mphf const &r)
-		{
-			_nb_levels = r._nb_levels;
-			_gamma = r._gamma;
-			_nelem = r._nelem;
-			_hash_domain = r._hash_domain;
-			_proba_collision = r._proba_collision;
-			_lastbitsetrank = r._lastbitsetrank;
-			_final_hash = r._final_hash;
-			
-			_levels = (level **) malloc(_nb_levels * sizeof(level *) );
-
-			for(int ii=0; ii<_nb_levels; ii++)
-			{
-				_levels[ii] = new level(r._levels[ii]);
-			}
-			
-		}
-		
-		// Copy assignment operator
-		mphf &operator=(mphf const &r)
-		{
-			if (&r != this)
-			{
-				if(_levels != nullptr)
-				{
-					for(int ii=0; ii<_nb_levels; ii++)
-					{
-						delete _levels[ii];
-					}
-					free(_levels);
-				}
-				
-				_nb_levels = r._nb_levels;
-				_gamma = r._gamma;
-				_nelem = r._nelem;
-				_hash_domain = r._hash_domain;
-				_proba_collision = r._proba_collision;
-				_lastbitsetrank = r._lastbitsetrank;
-				_final_hash = r._final_hash;
-				
-				_levels = (level **) malloc(_nb_levels * sizeof(level *) );
-				
-				for(int ii=0; ii<_nb_levels; ii++)
-				{
-					_levels[ii] = new level(r._levels[ii]);
-				}
-			}
-			return *this;
-		}
-		
-		// Move constructor
-		mphf(mphf &&r)
-		{
-			*this = std::move(r);
-		}
-		
-		// Move assignment operator
-		mphf &operator=(mphf &&r)
-		{
-			if (&r != this)
-			{
-				if(_levels != nullptr)
-				{
-					for(int ii=0; ii<_nb_levels; ii++)
-					{
-						delete _levels[ii];
-					}
-					free(_levels);
-				}
-				_nb_levels = std::move(r._nb_levels);
-				_gamma = std::move(r._gamma);
-				_nelem = std::move(r._nelem);
-				_hash_domain = std::move(r._hash_domain);
-				_proba_collision = std::move(r._proba_collision);
-				_lastbitsetrank = std::move(r._lastbitsetrank);
-				_final_hash = std::move(r._final_hash);
-				
-				_levels = r._levels;
-				r._levels = nullptr;
-			}
-			return *this;
-		}
-		
-		
 		
 		// allow perc_elem_loaded  elements to be loaded in ram for faster construction (default 3%), set to 0 to desactivate
 		template <typename Range>
@@ -893,13 +751,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			uint64_t offset = 0;
 			for(int ii = 0; ii< _nb_levels; ii++)
 			{
-				_tempBitset =  new bitVector(_levels[ii]->hash_domain); // temp collision bitarray for this level
+				_tempBitset =  new bitVector(_levels[ii].hash_domain); // temp collision bitarray for this level
 
 				processLevel(input_range,ii);
 
-				_levels[ii]->bitset->clearCollisions(0 , _levels[ii]->hash_domain , _tempBitset);
+				_levels[ii].bitset.clearCollisions(0 , _levels[ii].hash_domain , _tempBitset);
 
-				offset = _levels[ii]->bitset->build_ranks(offset);
+				offset = _levels[ii].bitset.build_ranks(offset);
 
 				delete _tempBitset;
 			}
@@ -935,10 +793,10 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			}
 			else
 			{
-				non_minimal_hp =  level_hash %  _levels[level]->hash_domain; // in fact non minimal hp would be  + _levels[level]->idx_begin
+				non_minimal_hp =  level_hash %  _levels[level].hash_domain; // in fact non minimal hp would be  + _levels[level]->idx_begin
 			}
 
-			minimal_hp = _levels[level]->bitset->rank(non_minimal_hp );
+			minimal_hp = _levels[level].bitset.rank(non_minimal_hp );
 
 			return minimal_hp;
 		}
@@ -954,7 +812,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			uint64_t totalsizeBitset = 0;
 			for(int ii=0; ii<_nb_levels; ii++)
 			{
-				totalsizeBitset += _levels[ii]->bitset->bitSize();
+				totalsizeBitset += _levels[ii].bitset.bitSize();
 			}
 
 			uint64_t totalsize =  totalsizeBitset +  _final_hash.size()*42*8 ;  // unordered map takes approx 42B per elem [personal test] (42B with uint64_t key, would be larger for other type of elem)
@@ -1059,7 +917,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			os.write(reinterpret_cast<char const*>(&_nelem), sizeof(_nelem));
 			 for(int ii=0; ii<_nb_levels; ii++)
 			 {
-			  	_levels[ii]->bitset->save(os);
+			  	_levels[ii].bitset.save(os);
 			 }
 
 			//save final hash
@@ -1085,17 +943,16 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			is.read(reinterpret_cast<char*>(&_lastbitsetrank), sizeof(_lastbitsetrank));
 			is.read(reinterpret_cast<char*>(&_nelem), sizeof(_nelem));
 			
-			_levels = (level **) malloc(_nb_levels * sizeof(level *) );
+			_levels.resize(_nb_levels);
+			
 
 			for(int ii=0; ii<_nb_levels; ii++)
 			{
-				_levels[ii] = new level();
-				_levels[ii]->bitset = new bitVector();
-				_levels[ii]->bitset->load(is);
+				//_levels[ii].bitset = new bitVector();
+				_levels[ii].bitset.load(is);
 			}
 
-			//_bitset = new bitVector();
-			//_bitset->load(is);
+
 
 			//mini setup, recompute size of each level
 			_proba_collision = 1.0 -  pow(((_gamma*_nelem -1 ) / (float)(_gamma*_nelem)),_nelem-1);
@@ -1104,11 +961,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			for(int ii=0; ii<_nb_levels; ii++)
 			{
 				//_levels[ii] = new level();
-				_levels[ii]->idx_begin = previous_idx;
-				_levels[ii]->hash_domain =  (( (uint64_t) (_hash_domain * pow(_proba_collision,ii)) + 63) / 64 ) * 64;
-				if(_levels[ii]->hash_domain == 0 )
-					_levels[ii]->hash_domain  = 64 ;
-				previous_idx += _levels[ii]->hash_domain;
+				_levels[ii].idx_begin = previous_idx;
+				_levels[ii].hash_domain =  (( (uint64_t) (_hash_domain * pow(_proba_collision,ii)) + 63) / 64 ) * 64;
+				if(_levels[ii].hash_domain == 0 )
+					_levels[ii].hash_domain  = 64 ;
+				previous_idx += _levels[ii].hash_domain;
 			}
 
 			//restore final hash
@@ -1148,24 +1005,22 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			// printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
 
 			_nb_levels = 25;
-
-			_levels = (level **) malloc(_nb_levels * sizeof(level *) );
+			_levels.resize(_nb_levels);
 
 			//build levels
 			uint64_t previous_idx =0;
 			for(int ii=0; ii<_nb_levels; ii++)
 			{
-				_levels[ii] = new level();
 
-				_levels[ii]->idx_begin = previous_idx;
+				_levels[ii].idx_begin = previous_idx;
 
 				// round size to nearest superior multiple of 64, makes it easier to clear a level
-				_levels[ii]->hash_domain =  (( (uint64_t) (_hash_domain * pow(_proba_collision,ii)) + 63) / 64 ) * 64;
-				if(_levels[ii]->hash_domain == 0 ) _levels[ii]->hash_domain  = 64 ;
-				previous_idx += _levels[ii]->hash_domain;
+				_levels[ii].hash_domain =  (( (uint64_t) (_hash_domain * pow(_proba_collision,ii)) + 63) / 64 ) * 64;
+				if(_levels[ii].hash_domain == 0 ) _levels[ii].hash_domain  = 64 ;
+				previous_idx += _levels[ii].hash_domain;
 
 
-				_levels[ii]->bitset = NULL;
+				_levels[ii].bitset = NULL;
 
 				//printf("build level %i bit array : start %12llu, size %12llu  ",ii,_levels[ii]->idx_begin,_levels[ii]->hash_domain );
 				//printf(" expected elems : %.2f %% total \n",100.0*pow(_proba_collision,ii));
@@ -1206,7 +1061,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				}
 
 
-				if( _levels[ii]->get(hash_raw) )
+				if( _levels[ii].get(hash_raw) )
 				{
 					break;
 				}
@@ -1222,9 +1077,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		//insert into bitarray
 		void insertIntoLevel(uint64_t level_hash, int i)
 		{
-			uint64_t hashl =  level_hash % _levels[i]->hash_domain;
+			uint64_t hashl =  level_hash % _levels[i].hash_domain;
 
-			if( _levels[i]->bitset->atomic_test_and_set(hashl) )
+			if( _levels[i].bitset.atomic_test_and_set(hashl) )
 			{
 				_tempBitset->atomic_test_and_set(hashl);
 			}
@@ -1237,7 +1092,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		void processLevel(Range const& input_range,int i)
 		{
 			////alloc the bitset for this level
-			_levels[i]->bitset =   new bitVector(_levels[i]->hash_domain); ;
+			_levels[i].bitset =  bitVector(_levels[i].hash_domain); ;
 
 			_cptLevel = 0;
 			_hashidx = 0;
@@ -1282,7 +1137,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		}
 
 	private:
-		level ** _levels;
+		//level ** _levels;
+		std::vector<level> _levels;
 		int _nb_levels;
         MultiHasher_t _hasher;
 		bitVector * _tempBitset;
