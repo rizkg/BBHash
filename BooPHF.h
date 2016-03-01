@@ -1019,9 +1019,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				if(_levels[ii].hash_domain == 0 ) _levels[ii].hash_domain  = 64 ;
 				previous_idx += _levels[ii].hash_domain;
 
-
-				_levels[ii].bitset = NULL;
-
 				//printf("build level %i bit array : start %12llu, size %12llu  ",ii,_levels[ii]->idx_begin,_levels[ii]->hash_domain );
 				//printf(" expected elems : %.2f %% total \n",100.0*pow(_proba_collision,ii));
 
