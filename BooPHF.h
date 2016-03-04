@@ -716,7 +716,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		//typedef IndepHashFunctors<elem_t,Hasher_t> MultiHasher_t; //faster than xorshift
 
 	public:
-		mphf()
+		mphf() : _built(false)
 		{}
 
 
@@ -774,11 +774,15 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 
 			pthread_mutex_destroy(&_mutex);
+			
+			_built = true;
 		}
 
 
 		uint64_t lookup(elem_t elem)
 		{
+			if(! _built) return ULLONG_MAX;
+			
 			//auto hashes = _hasher(elem);
 			uint64_t non_minimal_hp,minimal_hp;
 
@@ -788,8 +792,19 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 			if( level == (_nb_levels-1))
 			{
-				minimal_hp = _final_hash[elem] + _lastbitsetrank;
-				return minimal_hp;
+				auto in_final_map  = _final_hash.find (elem);
+				if ( in_final_map == mymap.end() )
+				{
+					//elem was not in orignal set of keys
+					return ULLONG_MAX; //  means elem not in set
+				}
+				else
+				{
+					minimal_hp =  in_final_map->second + _lastbitsetrank;
+					return minimal_hp;
+				}
+//				minimal_hp = _final_hash[elem] + _lastbitsetrank;
+//				return minimal_hp;
 			}
 			else
 			{
@@ -1159,7 +1174,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		std::vector< elem_t > setLevelFastmode;
 		int _fastModeLevel;
 		bool _withprogress;
-
+		bool _built;
 	public:
 		pthread_mutex_t _mutex;
 	};
