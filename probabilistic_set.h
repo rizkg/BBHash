@@ -21,7 +21,7 @@ class probabilisticSet {
 public:
     probabilisticSet(const uint64_t nb_elements, const int fingerprint_size): _nb_elements(nb_elements), _fingerprint_size(fingerprint_size){
         _bas = bitArraySet(nb_elements,fingerprint_size);
-        _fingerprint_range = 1<<_fingerprint_size;
+        _fingerprint_range = (uint64_t)1<<_fingerprint_size;
     }
     
     void add(const uint64_t i, const uint64_t key){

@@ -38,8 +38,8 @@ public:
     
     
     void set_i(const uint64_t indice_element, uint64_t to_set){
-        if (to_set>_mask_element) {
-            cerr<<"Cannot add elements bigger than "<<to_set<<": "<<_nb_bit_per_unit<<" bits"<<endl;
+        if (to_set>_mask_unit) {
+            cerr<<"Cannot add elements bigger than "<<_mask_unit<<" ("<<_nb_bit_per_unit<<" bits), element "<<to_set<<" to big"<<endl;
             exit(1);
         }
         const uint64_t starting_unit_indice = _get_starting_unit_indice(indice_element);

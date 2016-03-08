@@ -51,13 +51,13 @@ int main (int argc, char* argv[]){
 //    
 //    for (int i=0; i<nelem; i++) {
 //        bas.set_i(i, i+1);
-//    }
 //    
-//    for (int j=0; j<nelem; j++) {
+//    
+//    for (int j=0; j<=i; j++) {
 //        uint64_t res=bas.get_i(j);
 //        if(res != j+1){
 //            
-//            cerr<<"FILL PB indice"<<j<<" should be "<<j+1<<" while it is "<<res<<endl;
+//            cerr<<"FILL PB indice"<<j<<" should be "<<j+1<<" while it is "<<res<<" i = "<<i<<endl;
 //            return EXIT_FAILURE;
 //        }
 //        
@@ -65,7 +65,7 @@ int main (int argc, char* argv[]){
 //    }
     
     
-    
+//    }
     
     
     
