@@ -39,8 +39,7 @@ int main (int argc, char* argv[]){
     
     int nelem = atoi(argv[1]);
     int nbitperelem =atoi(argv[2]);
-    
-    
+ 
     bitArraySet bas (nelem,nbitperelem);
     
 //    bas.set_i(0,298);
@@ -48,23 +47,23 @@ int main (int argc, char* argv[]){
 //    cout<<bas.get_i(0)<<endl;
     
     
-//    
+//    uint64_t max=(((uint64_t)1)<<nbitperelem)-1;
+//    if (max<nelem) nelem=max;
 //    for (int i=0; i<nelem; i++) {
 //        bas.set_i(i, i+1);
-//    
-//    
-//    for (int j=0; j<=i; j++) {
-//        uint64_t res=bas.get_i(j);
-//        if(res != j+1){
+//        
+//        
+//        for (int j=0; j<=i; j++) {
+//            //        cout<<"-------------"<<i<<","<<j<<endl;
+//            uint64_t res=bas.get_i(j);
+//            if(res != j+1){
+//                
+//                cerr<<"FILL PB indice"<<j<<" should be "<<j+1<<" while it is "<<res<<" i = "<<i<<endl;
+//                return EXIT_FAILURE;
+//            }
 //            
-//            cerr<<"FILL PB indice"<<j<<" should be "<<j+1<<" while it is "<<res<<" i = "<<i<<endl;
-//            return EXIT_FAILURE;
+//            
 //        }
-//        
-//        
-//    }
-    
-    
 //    }
     
     

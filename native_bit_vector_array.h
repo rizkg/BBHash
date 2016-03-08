@@ -38,8 +38,8 @@ public:
     
     
     void set_i(const uint64_t indice_element, uint64_t to_set){
-        if (to_set>_mask_unit) {
-            cerr<<"Cannot add elements bigger than "<<_mask_unit<<" ("<<_nb_bit_per_unit<<" bits), element "<<to_set<<" to big"<<endl;
+        if (to_set>_mask_element) {
+            cerr<<"Cannot add elements bigger than "<<_mask_element<<" ("<<_nb_bit_per_element<<" bits), element "<<to_set<<" to big"<<endl;
             exit(1);
         }
         const uint64_t starting_unit_indice = _get_starting_unit_indice(indice_element);
@@ -101,7 +101,7 @@ public:
         const int starting_position_in_the_unit = _get_starting_position_in_the_unit(indice_element, starting_unit_indice);
 //        cout<<"element "<<indice_element<<" in array composed of "<<_nb_unit<<" units of size "<<_nb_bit_per_unit<<endl;
 //        cout<<"starting unit "<<starting_unit_indice<<" position "<<starting_position_in_the_unit<<endl;
-        
+//        
         const int excluded_ending_position_in_the_unit=starting_position_in_the_unit+_nb_bit_per_element;
 //        cout <<"excluded_ending_position_in_the_unit="<<excluded_ending_position_in_the_unit<<endl;
         /** case 1: the whole element is contained in the unit */
@@ -161,6 +161,7 @@ private:
     void set_mask(){
         _mask_unit = get_mask(_nb_bit_per_unit);
         _mask_element = get_mask(_nb_bit_per_element);
+//        cout<<_nb_bit_per_element<<" youhou "<<_mask_element<<endl;
     }
     
     int  _nb_bit_per_unit; // 64 or better 128
