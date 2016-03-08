@@ -6,8 +6,9 @@
 //
 //
 #include <iostream>
-#include "bit_vector_array.h"
+#include "native_bit_vector_array.h"
 #include "probabilistic_set.h"
+#include <chrono>
 
 using namespace std;
 
@@ -32,37 +33,47 @@ int main (int argc, char* argv[]){
 		return EXIT_FAILURE;
         
     }
-    cout<<"####################################"<<endl;
-    cout<<"TESTING BISET"<<endl;
-    cout<<"####################################"<<endl;
+//    cout<<"####################################"<<endl;
+//    cout<<"TESTING BITSET"<<endl;
+//    cout<<"####################################"<<endl;
     
     int nelem = atoi(argv[1]);
     int nbitperelem =atoi(argv[2]);
-    bitArraySet bas(nelem,nbitperelem);
-    
-    cout<<"bas created"<<endl;
-    
-    _bitset toset(nbitperelem);
-    for(int i=0;i<nbitperelem;i++)
-        toset[i]=i%2;
-
-    cout<<"insert "<<toset<<" postion 2"<<endl;
-    
-//    cout<<bas.get_set()<<endl;
-    
-    bas.set_i(2,toset);
-    
-    //    cout<<bas.get_set()<<endl;
-    
-    cout<<"validation of position 2:"<<bas.get_i(2)<<endl;
-
     
     
+    bitArraySet bas (nelem,nbitperelem);
     
-    cout<<"####################################"<<endl;
-    cout<<"TESTING PROBABILISTIC SET"<<endl;
-    cout<<"####################################"<<endl;
+//    bas.set_i(0,298);
     
+//    cout<<bas.get_i(0)<<endl;
+    
+    
+//    
+//    for (int i=0; i<nelem; i++) {
+//        bas.set_i(i, i+1);
+//    }
+//    
+//    for (int j=0; j<nelem; j++) {
+//        uint64_t res=bas.get_i(j);
+//        if(res != j+1){
+//            
+//            cerr<<"FILL PB indice"<<j<<" should be "<<j+1<<" while it is "<<res<<endl;
+//            return EXIT_FAILURE;
+//        }
+//        
+//        
+//    }
+    
+    
+    
+    
+    
+    
+//
+//    cout<<"####################################"<<endl;
+//    cout<<"TESTING PROBABILISTIC SET"<<endl;
+//    cout<<"####################################"<<endl;
+//    
     probabilisticSet ps (nelem,nbitperelem);
     
 //    ps.add(test_element,test_element);
@@ -70,10 +81,14 @@ int main (int argc, char* argv[]){
 //    cout<<ps.exists(test_element,test_element)<<endl;
     
     // Fill the full vector array (with key = index for now)
+    auto start = std::chrono::high_resolution_clock::now();
     for(uint64_t i=0;i<nelem;i++) {
         ps.add(i,i);
     }
+    auto finish = std::chrono::high_resolution_clock::now();
     
+    auto time_fill = std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()/nelem;
+//    std::cout<<"FILL: " << std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()/nelem<<" ns per element"<<endl;
     
     // Assert each element is present (no FN)
     for(uint64_t i=0;i<nelem;i++) {
@@ -83,16 +98,28 @@ int main (int argc, char* argv[]){
             return EXIT_FAILURE;
         }
     }
+    
+    
 
     // count the number of FP among one million random queries
     std::srand(std::time(0)); // use current time as seed for random generator
     uint64_t nb_FP=0;
-    uint64_t nb_queries = 10000000;
+    uint64_t nb_queries = 100000;
+    
+    
+
+    start = std::chrono::high_resolution_clock::now();
     for(uint64_t i=0;i<nb_queries;i++) {
         if(ps.exists(i%nelem,std::rand())) nb_FP++;
     }
 
-    cout<<nb_FP<<" FP among "<<nb_queries<<" queries "<<(100*nb_FP)/(float)(nb_queries)<<" %"<<endl;
+//    cout<<nb_FP<<" FP among "<<nb_queries<<" queries "<<(100*nb_FP)/(float)(nb_queries)<<" %"<<endl;
+    finish = std::chrono::high_resolution_clock::now();
+//    std::cout <<"QUERY: "<<std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()/nb_queries<<" ns per query"<<endl;
+    auto time_query = std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()/nb_queries;
+    auto FP_rate = (100*nb_FP)/(float)(nb_queries);
+    
+    cout<<nbitperelem<<" "<<time_fill<<" "<<time_query<<" "<<FP_rate<<endl;
     return EXIT_SUCCESS;
 }
 

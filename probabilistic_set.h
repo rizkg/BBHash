@@ -9,14 +9,12 @@
 #ifndef probabilistic_set_h
 #define probabilistic_set_h
 using namespace std;
-#include <boost/dynamic_bitset.hpp>
 
 #include <iostream>
-#include "bit_vector_array.h"
+#include "native_bit_vector_array.h"
 
 using namespace std;
 
-typedef boost::dynamic_bitset<> _bitset;
 
 
 class probabilisticSet {
@@ -24,25 +22,23 @@ public:
     probabilisticSet(const uint64_t nb_elements, const int fingerprint_size): _nb_elements(nb_elements), _fingerprint_size(fingerprint_size){
         _bas = bitArraySet(nb_elements,fingerprint_size);
         _fingerprint_range = 1<<_fingerprint_size;
-        cout<<_fingerprint_range<<endl;
     }
     
     void add(const uint64_t i, const uint64_t key){
         uint64_t fingerprint = korenXor(key)%_fingerprint_range;
-        _bitset toset(_fingerprint_size,fingerprint);
-        _bas.set_i(i,toset);
+        _bas.set_i(i,fingerprint);
     }
     
     bool exists(const uint64_t i, const uint64_t key){
         uint64_t fingerprint = korenXor(key)%_fingerprint_range;
-        uint64_t stored_fingerprint = (uint64_t)_bas.get_i(i).to_ulong();
+        uint64_t stored_fingerprint = _bas.get_i(i);
         if (fingerprint == stored_fingerprint) return true;
         return false;
     }
     
 private:
     
-    uint64_t korenXor(uint64_t x){
+    inline uint64_t korenXor(uint64_t x){
         x ^= (x << 21);
         x ^= (x >> 35);
         x ^= (x << 4);
