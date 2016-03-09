@@ -816,7 +816,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			return minimal_hp;
 		}
 
-		uint64_t nbKeys()
+		uint64_t nbKeys() const
 		{
             return _nelem;
         }
