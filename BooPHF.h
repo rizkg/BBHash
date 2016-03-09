@@ -1000,7 +1000,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 				_final_hash[key] = value;
 			}
-
+			_built = true;
 		}
 
 
