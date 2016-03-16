@@ -477,7 +477,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			return *this;
 		}
 		// Move constructor
-		bitVector(bitVector &&r) : _size(0),_bitArray ( nullptr)
+		bitVector(bitVector &&r) : _bitArray ( nullptr),_size(0)
 		{
 			*this = std::move(r);
 		}
