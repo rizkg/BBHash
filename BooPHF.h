@@ -1057,7 +1057,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		uint64_t getLevel(hash_pair_t & bbhash, elem_t val,int * res_level, int maxlevel = 100)
 		{
 			int level = 0;
-			uint64_t hash_raw;
+			uint64_t hash_raw=0;
 
 			for (int ii=0; ii<(_nb_levels-1) &&  ii < maxlevel ; ii++ )
 			{
