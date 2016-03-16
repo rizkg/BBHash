@@ -1145,6 +1145,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			}
 		//	printf("\ngoing to level %i  : %llu elems  %.2f %%  expected : %.2f %% \n",i,_cptLevel,100.0* _cptLevel/(float)_nelem,100.0* pow(_proba_collision,i) );
 
+			if(i == _fastModeLevel) //shrink to actual number of elements in set
+			{
+				//printf("resize setLevelFastmode to %lli \n",_idxLevelsetLevelFastmode);
+				setLevelFastmode.resize(_idxLevelsetLevelFastmode);
+			}
 			delete [] tab_threads;
 		}
 
