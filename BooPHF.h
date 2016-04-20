@@ -841,7 +841,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		}
 
 		template <typename Iterator>  //typename Range,
-        void pthread_processLevel(elem_t * buffer, std::shared_ptr<Iterator> shared_it, std::shared_ptr<Iterator> until_p, int i)
+        void pthread_processLevel( std::vector<elem_t>  & buffer , std::shared_ptr<Iterator> shared_it, std::shared_ptr<Iterator> until_p, int i)
 		{
 			uint64_t nb_done =0;
 			int tid =  __sync_fetch_and_add (&_nb_living, 1);
@@ -1199,7 +1199,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 		mphf<elem_t, Hasher_t>  * obw = (mphf<elem_t, Hasher_t > *) targ->boophf;
 		int level = targ->level;
-		elem_t * buffer =  (elem_t *)  malloc(NBBUFF*sizeof(elem_t));
+		std::vector<elem_t> buffer;
+		buffer.resize(NBBUFF);
+		
 		pthread_mutex_t * mutex =  & obw->_mutex;
 
 		pthread_mutex_lock(mutex); // from comment above: "//get starting iterator for this thread, must be protected (must not be currently used by other thread to copy elems in buff)"
@@ -1209,7 +1211,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 		obw->pthread_processLevel(buffer, startit, until_p, level);
 
-		free(buffer);
 		return NULL;
 	}
 }
