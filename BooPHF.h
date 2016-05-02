@@ -4,6 +4,7 @@
 
 #pragma once
 #include <stdio.h>
+#include <climits>
 #include <stdlib.h>
 #include <iostream>
 #include <math.h>
@@ -970,7 +971,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 
 			//mini setup, recompute size of each level
-			_proba_collision = 1.0 -  pow(((_gamma*_nelem -1 ) / (float)(_gamma*_nelem)),_nelem-1);
+			_proba_collision = 1.0 -  pow(((_gamma*(double)_nelem -1 ) / (_gamma*(double)_nelem)),_nelem-1);
 			uint64_t previous_idx =0;
 			_hash_domain = (size_t)  (ceil(double(_nelem) * _gamma)) ;
 			for(int ii=0; ii<_nb_levels; ii++)
@@ -1014,7 +1015,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			if(_fastmode)
 				setLevelFastmode.resize(_percent_elem_loaded_for_fastMode * (double)_nelem );
 
-			_proba_collision = 1.0 -  pow(((_gamma*_nelem -1 ) / (double)(_gamma*_nelem)),_nelem-1);
+			_proba_collision = 1.0 -  pow(((_gamma*(double)_nelem -1 ) / (_gamma*(double)_nelem)),_nelem-1);
 
 			double sum_geom =_gamma * ( 1.0 +  _proba_collision / (1.0 - _proba_collision));
 			// printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
