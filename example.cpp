@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <random>
+#include <algorithm>
 
 using namespace std;
 
