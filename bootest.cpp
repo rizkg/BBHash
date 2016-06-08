@@ -362,6 +362,7 @@ int main (int argc, char* argv[]){
 	bool load_mphf = false;
 	bool buckets = false;
 	bool from_disk = true;
+	bool bench_lookup_out = false;
 
 	if(argc <3 ){
 		printf("Usage :\n");
@@ -373,6 +374,8 @@ int main (int argc, char* argv[]){
 		printf("\t-load\n");
 		printf("\t-inram\n");
 		printf("\t-buckets\n");
+		printf("\t-outquery\n");
+
 		return EXIT_FAILURE;
 	}
 
@@ -388,6 +391,8 @@ int main (int argc, char* argv[]){
 		if(!strcmp("-load",argv[ii])) load_mphf= true;
 		if(!strcmp("-inram",argv[ii])) from_disk= false;
 		if(!strcmp("-buckets",argv[ii])) buckets= true;
+		if(!strcmp("-outquery",argv[ii])) bench_lookup_out= true;
+
 	}
 
 	FILE * key_file = NULL;
@@ -667,7 +672,56 @@ int main (int argc, char* argv[]){
 
 		bench_mphf_lookup(bphf,data_iterator);
 	}
+	
+	if(bench_lookup_out)
+	{
+		int nrandom = 100000000; //10000000
+		static std::mt19937_64 rng;
+		rng.seed(std::mt19937_64::default_seed); //default seed
+		u_int64_t *  data_random = (u_int64_t * ) calloc(nrandom,sizeof(u_int64_t));
+		for (u_int64_t i = 0; i < nrandom; i++){
+			data_random[i] = rng();
+		//	printf("%llu \n",data_random[i]);
+		}
+		u_int64_t mphf_value;
+		u_int64_t dumb=0;
+		u_int64_t nb_fp =0;
+		u_int64_t nb_out_of_range =0;
 
+		
+		for (size_t ii = 0; ii < nrandom; ++ii) {
+			
+			mphf_value = bphf->lookup(data_random[ii]);
+
+			//printf("m %llu \n",mphf_value);
+
+			if(mphf_value != ULLONG_MAX)
+			{
+				nb_fp++;
+			}
+			
+			if((mphf_value != ULLONG_MAX) &&  (mphf_value >= nelem))
+			{
+				nb_out_of_range++;
+			}
+			
+		}
+		
+		
+		double tick = get_time_usecs();
+		
+		for (size_t ii = 0; ii < nrandom; ++ii) {
+			mphf_value = bphf->lookup(data_random[ii]);
+			//do some silly work
+			dumb+= mphf_value;
+
+		}
+		double elapsed = get_time_usecs() - tick;
+
+		printf("query %i elem  out of set  FP rate %.2f   nb issues %llu    lookup %.2f  ns \n",nrandom, nb_fp/(float)nrandom,nb_out_of_range
+			   ,1000.0*elapsed/(double)nrandom );
+	}
+	
 
 	if(!from_disk){
 		free(data);

@@ -1,8 +1,7 @@
 # CC=/usr/bin/g++
 CC=g++
-CFLAGS = -O3 -std=c++11 -lpthread -flto -march=native
-LDFLAGS=-flto
-EXEC=Bootest
+CFLAGS = -O3 -std=c++11 -lpthread -march=native
+EXEC=Bootest example
 all: $(EXEC)
 
 ifeq ($(prof),1)
@@ -15,8 +14,11 @@ endif
 
 all: $(EXEC)
 
-Bootest:  bootest.cpp BooPHF.h
-	$(CC)  $^ $(CFLAGS)
+example: example.cpp
+	$(CC) -o $@  $^ $(CFLAGS)
+
+Bootest:  bootest.cpp
+	$(CC) -o $@  $^ $(CFLAGS)
 
 %.o: %.cpp %.h
 	$(CC) -o $@ -c $< $(CFLAGS)
