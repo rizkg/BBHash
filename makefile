@@ -1,5 +1,5 @@
 # CC=/usr/bin/g++
-CC=g++
+CXX ?= g++
 CFLAGS = -O3 -std=c++11 -lpthread -march=native
 EXEC=Bootest example
 all: $(EXEC)
@@ -19,13 +19,13 @@ test:
 all: $(EXEC)
 
 example: example.cpp
-	$(CC) -o $@  $^ $(CFLAGS)
+	$(CXX) -o $@  $^ $(CFLAGS)
 
 Bootest:  bootest.cpp
-	$(CC) -o $@  $^ $(CFLAGS)
+	$(CXX) -o $@  $^ $(CFLAGS)
 
 %.o: %.cpp %.h
-	$(CC) -o $@ -c $< $(CFLAGS)
+	$(CXX) -o $@ -c $< $(CFLAGS)
 
 
 clean:
