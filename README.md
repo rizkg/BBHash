@@ -7,12 +7,13 @@ It is easy to include in other projects (just include a single .h file) and has 
 
 # How to run test
 
-A sample usage is provided in file bootest.cpp, compile and run with : ( params are nb_elements nb_threads)
+A sample usage is provided in file example.cpp, compile and run with : ( params are nb_elements nb_threads)
 
     make
-    ./Bootest 100000000 1
+    ./example 100000000 1
     
-Use -check to check correctness of the hash function, and -bench to benchmark lookup performance.
+
+File Bootest.cpp contains more options, use ./Bootest with  -check to check correctness of the hash function, and -bench to benchmark lookup performance.
     
 Here is a sample output :
     
@@ -27,6 +28,7 @@ Here is a sample output :
      --- boophf working correctly --- 
     bench lookups  sample size 9999872 
     BBhash bench lookups average 258.06 ns +- stddev  5.55 %   (fingerprint 5000111281850410) 
+
 
 
 
