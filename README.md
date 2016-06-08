@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/rizkg/BooPHF.svg?branch=master)](https://travis-ci.org/rizkg/BooPHF)
+
 # BBHash
 BBHash is a simple library for building minimal perfect hash function.
 It is designed to handle large scale datasets. The function is just a little bit larger than other state-of-the-art libraries, it takes approximately 3 bits / elements (compared to 2.62 bits/elem for the emphf lib), but construction is faster and does not require additional memory. 
