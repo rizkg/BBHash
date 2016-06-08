@@ -11,7 +11,11 @@ ifeq ($(deb),1)
  CFLAGS+= -O0 -DASSERTS -g
 endif
 
+.PHONY: test clean
 
+
+test:
+	./Bootest 10000 1 -check
 all: $(EXEC)
 
 example: example.cpp
@@ -27,3 +31,4 @@ Bootest:  bootest.cpp
 clean:
 	rm -rf *.o
 	rm Bootest
+	rm example
