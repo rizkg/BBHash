@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/rizkg/BooPHF.svg?branch=master)](https://travis-ci.org/rizkg/BooPHF)
+[![Build Status](https://travis-ci.org/rizkg/BBHash.svg?branch=master)](https://travis-ci.org/rizkg/BBHash)
 
 # BBHash
 BBHash is a simple library for building minimal perfect hash function.
