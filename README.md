@@ -9,7 +9,7 @@ It is easy to include in other projects (just include a single .h file) and has 
 
 # How to run test
 
-A sample usage is provided in file example.cpp, compile and run with : ( params are nb_elements nb_threads)
+A sample usage is provided in file example.cpp, compile and run with: ( params are nb_elements nb_threads)
 
     make
     ./example 100000000 1
@@ -36,4 +36,5 @@ Here is a sample output :
 
 # Authors
 Guillaume Rizk, Antoine Limasset, Rayan Chikhi
+
 guillaume.rizk@algorizk.com
