@@ -34,5 +34,6 @@ Here is a sample output :
 
 
 
-# Author
-Guillaume Rizk guillaume.rizk@algorizk.com
+# Authors
+Guillaume Rizk, Antoine Limasset, Rayan Chikhi
+guillaume.rizk@algorizk.com
