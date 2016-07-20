@@ -1,6 +1,6 @@
 # CC=/usr/bin/g++
 CXX ?= g++
-CFLAGS = -O3 -std=c++11 -lpthread -march=native
+CFLAGS = -O3 -std=c++11 -lpthread
 EXEC=Bootest example
 all: $(EXEC)
 
