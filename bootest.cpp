@@ -169,6 +169,91 @@ class file_binary{
 	FILE * _is;
 };
 
+
+
+//simple iterator to generate list of distinct u_int64_t keys (not random, just equally distributed in [0;ULLONG_MAX])
+class uint64_iterator : public std::iterator<std::forward_iterator_tag, u_int64_t>{
+public:
+	
+	uint64_iterator() : _nb_elem(0) , _curr(ULLONG_MAX), _step(0),_nb_iterated(0)
+	{
+	}
+	
+	uint64_iterator(const uint64_iterator& cr)
+	{
+		_nb_elem = cr._nb_elem;
+		_curr = cr._curr;
+		_step = cr._step;
+		_stop = cr._stop;
+		_nb_iterated = cr._nb_iterated;
+	}
+	
+	uint64_iterator(u_int64_t nb_elem, u_int64_t stop ) : _nb_elem(nb_elem) , _curr(0),_nb_iterated(0), _stop(stop)
+	{
+		_step =  ULLONG_MAX / _nb_elem;
+	}
+	
+	~uint64_iterator()
+	{
+	}
+	
+	u_int64_t const& operator*()  {  return _curr;  }
+	
+	uint64_iterator& operator++()
+	{
+
+		_curr = _curr + _step;
+		_nb_iterated++;
+		if(_nb_iterated >= _stop) _nb_elem = 0;
+		return *this;
+	}
+	
+	friend bool operator==(uint64_iterator const& lhs, uint64_iterator const& rhs)
+	{
+		if (!lhs._nb_elem || !rhs._nb_elem)  {  if (!lhs._nb_elem && !rhs._nb_elem) {  return true; } else {  return false;  } }
+		assert(lhs._nb_elem == rhs._nb_elem);
+		return rhs._curr == lhs._curr;
+	}
+	
+	friend bool operator!=(uint64_iterator const& lhs, uint64_iterator const& rhs)  {  return !(lhs == rhs);  }
+
+	u_int64_t _nb_elem;
+	u_int64_t _curr;
+	u_int64_t _step;
+	u_int64_t _stop;
+	u_int64_t _nb_iterated;
+};
+
+//will generate range over [0;ULLONG_MAX]
+//elem equally spaced , separated  by  ULLONG_MAX/nb_elem starting at 0
+//will stop after nbiter
+class uint64_range{
+public:
+	uint64_range(u_int64_t nb_elem, u_int64_t nbiter) : _nb_elem(nb_elem), _stop(nbiter)
+	{
+		
+	}
+	~uint64_range()
+	{
+		
+	}
+	
+	uint64_iterator begin() const
+	{
+		return uint64_iterator(_nb_elem,_stop);
+	}
+	uint64_iterator end() const
+	{
+		return uint64_iterator();
+	}
+	
+	
+private:
+	u_int64_t _nb_elem;
+	u_int64_t _stop;
+
+};
+
 //stolen from emphf
 struct stats_accumulator {
 	stats_accumulator()
@@ -274,9 +359,11 @@ int check_mphf_correctness (phf_t * bphf, Range const& input_range){
 		for (auto const& val: input_range)
 		{
 			mphf_value = bphf->lookup(val);
+			//printf("%llu  mphf_value %llu\n",val,mphf_value);
+
 			if(mphf_value>=nelem)
 			{
-				range_problems++;
+				range_problems++; continue;
 			}
 			if(check_table[mphf_value]==0)
 			{
@@ -363,7 +450,8 @@ int main (int argc, char* argv[]){
 	bool buckets = false;
 	bool from_disk = true;
 	bool bench_lookup_out = false;
-
+	bool on_the_fly= false;
+	
 	if(argc <3 ){
 		printf("Usage :\n");
 		printf("%s <nelem> <nthreads>  [options]\n",argv[0]);
@@ -374,7 +462,9 @@ int main (int argc, char* argv[]){
 		printf("\t-load\n");
 		printf("\t-inram\n");
 		printf("\t-buckets\n");
-		printf("\t-outquery\n");
+		printf("\t-outquery\n");  // bench fp rate
+		printf("\t-onthefly\n"); //will generate keys on the fly without storing them at all in ram or on disk
+
 
 		return EXIT_FAILURE;
 	}
@@ -392,9 +482,24 @@ int main (int argc, char* argv[]){
 		if(!strcmp("-inram",argv[ii])) from_disk= false;
 		if(!strcmp("-buckets",argv[ii])) buckets= true;
 		if(!strcmp("-outquery",argv[ii])) bench_lookup_out= true;
+		if(!strcmp("-onthefly",argv[ii])) on_the_fly= true;
 
 	}
 
+	
+//	///testing terator
+//	printf("testing terator :\n");
+//	uint64_range terator_in =  uint64_range(10,10);
+//	uint64_range terator = uint64_range(terator_in);
+//	
+//	
+//	for (auto const& val: terator) {
+//		printf("%llu \n",val);
+//
+//	}
+//	exit(0);
+	
+	
 	FILE * key_file = NULL;
 	FILE * bench_file = NULL;
 
@@ -428,37 +533,40 @@ int main (int argc, char* argv[]){
 		printf("found %lli duplicated items  \n",nelem+rab-(jj + 1) );
 	}
 	else{
-		//methode simple pas besoin de  de-dupliquer, mais pas "random"
-		u_int64_t step = ULLONG_MAX / nelem;
-		// u_int64_t step = 100 / nelem;
-		u_int64_t current = 0;
-		for (u_int64_t i = 0; i < nelem; i++)
+		if(!on_the_fly)
 		{
-			fwrite(&current, sizeof(u_int64_t), 1, key_file);
-			current = current + step;
-		}
-		fclose(key_file);
-		printf("key file generated \n");
-
-		if(bench_lookup)
-		{
-			bench_file = fopen("benchfile","w+");
-			//create a test file
-			//if n < 10 M take all elements, otherwise regular sample to have 10 M elements
-			u_int64_t stepb =  nelem  / 10000000;
-			if(stepb==0) stepb=1;
-			auto data_iterator = file_binary("keyfile");
-			u_int64_t cpt = 0;
-			nb_in_bench_file=0;
-			for (auto const& key: data_iterator) {
-				if( (cpt % stepb) == 0)
-				{
-					fwrite(&key, sizeof(u_int64_t), 1, bench_file);
-					nb_in_bench_file++;
-				}
-				cpt++;
+			//methode simple pas besoin de  de-dupliquer, mais pas "random"
+			u_int64_t step = ULLONG_MAX / nelem;
+			// u_int64_t step = 100 / nelem;
+			u_int64_t current = 0;
+			for (u_int64_t i = 0; i < nelem; i++)
+			{
+				fwrite(&current, sizeof(u_int64_t), 1, key_file);
+				current = current + step;
 			}
-			fclose(bench_file);
+			fclose(key_file);
+			printf("key file generated \n");
+			
+			if(bench_lookup)
+			{
+				bench_file = fopen("benchfile","w+");
+				//create a test file
+				//if n < 10 M take all elements, otherwise regular sample to have 10 M elements
+				u_int64_t stepb =  nelem  / 10000000;
+				if(stepb==0) stepb=1;
+				auto data_iterator = file_binary("keyfile");
+				u_int64_t cpt = 0;
+				nb_in_bench_file=0;
+				for (auto const& key: data_iterator) {
+					if( (cpt % stepb) == 0)
+					{
+						fwrite(&key, sizeof(u_int64_t), 1, bench_file);
+						nb_in_bench_file++;
+					}
+					cpt++;
+				}
+				fclose(bench_file);
+			}
 		}
 	}
 
@@ -603,7 +711,12 @@ int main (int argc, char* argv[]){
 		gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 
 		//MPHF CREATION
-		if(from_disk)
+		if (on_the_fly)
+		{
+			auto data_iterator =  uint64_range(nelem,nelem) ;
+			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
+		}
+		else if(from_disk)
 		{
 			auto data_iterator = file_binary("keyfile");
 			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
@@ -649,24 +762,38 @@ int main (int argc, char* argv[]){
 	}
 
 
-	if(check_correctness && from_disk )
+	if(check_correctness && on_the_fly )
+	{
+		auto data_iterator =  uint64_range(nelem,nelem) ;
+		check_mphf_correctness(bphf ,data_iterator);
+	}
+	else if(check_correctness && from_disk )
 	{
 		auto data_iterator = file_binary("keyfile");
 		check_mphf_correctness(bphf ,data_iterator);
 	}
-	if(check_correctness &&  !from_disk )
+	else if(check_correctness &&  !from_disk )
 	{
 		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
 		check_mphf_correctness(bphf ,data_iterator);
 	}
-	if(bench_lookup &&  from_disk)
+
+	
+	if(bench_lookup &&  on_the_fly)
+	{
+		auto data_iterator = uint64_range(nelem,1000000) ;
+		
+		bench_mphf_lookup(bphf,data_iterator);
+		
+	}
+	else if(bench_lookup &&  from_disk)
 	{
 		auto data_iterator = file_binary("benchfile");
 
 		bench_mphf_lookup(bphf,data_iterator);
 
 	}
-	if(bench_lookup &&  !from_disk)
+	else if(bench_lookup &&  !from_disk)
 	{
 		auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
 
