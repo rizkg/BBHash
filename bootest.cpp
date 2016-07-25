@@ -678,17 +678,47 @@ int main (int argc, char* argv[]){
 
 		if(bench_lookup)
 		{
-			auto data_iterator = file_binary("benchfile");
-			u_int64_t dumb=0;
-			begin = clock();
-			for (auto const& key: data_iterator) {
-				uint64_t hash=korenXor(key)%(nBuckets*nMphfByBucket);
-				u_int64_t mphf_value = MPHFs[hash].lookup(key) +  nb_elem_in_previous_buckets [hash];
-				dumb+= mphf_value;
-			}
-			end = clock();
 
-			printf("Buckets BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nb_in_bench_file, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nb_in_bench_file,dumb);
+			auto input_range = file_binary("benchfile");
+
+			vector<u_int64_t> sample;
+			u_int64_t mphf_value;
+			
+			//copy sample in ram
+			for (auto const& key: input_range) {
+				sample.push_back(key);
+			}
+			
+			printf("bench lookups  sample size %lu \n",sample.size());
+			//bench procedure taken from emphf
+			stats_accumulator stats;
+			double tick = get_time_usecs();
+			size_t lookups = 0;
+			static const size_t lookups_per_sample = 1 << 16;
+			u_int64_t dumb=0;
+			double elapsed;
+			size_t runs = 10;
+			
+			for (size_t run = 0; run < runs; ++run) {
+				for (size_t ii = 0; ii < sample.size(); ++ii) {
+					
+					uint64_t hash=korenXor(sample[ii])%(nBuckets*nMphfByBucket);
+					mphf_value = MPHFs[hash].lookup(sample[ii]) +  nb_elem_in_previous_buckets [hash];
+					dumb+= mphf_value;
+					
+					//do some silly work
+					
+					if (++lookups == lookups_per_sample) {
+						elapsed = get_time_usecs() - tick;
+						stats.add(elapsed / (double)lookups);
+						tick = get_time_usecs();
+						lookups = 0;
+					}
+				}
+			}
+			printf("BBhash buckets bench lookups average %.2f ns +- stddev  %.2f %%   (fingerprint %llu)  \n", 1000.0*stats.mean(),stats.relative_stddev(),dumb);
+			
+			///
 		}
 
 
