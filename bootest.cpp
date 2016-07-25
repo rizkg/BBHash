@@ -338,8 +338,8 @@ void compactBucket(uint start, uint n){
 		}
 
 		vector<thread> threads;
-		for(uint tn(0);tn<nthreads;++tn){
-			threads.push_back(thread(multipleMPHF,datas,tn*(nMphfByBucket/nthreads),nMphfByBucket/nthreads,i));
+		for(uint tn(0);tn<1;++tn){
+			threads.push_back(thread(multipleMPHF,datas,tn*(nMphfByBucket/1),nMphfByBucket/1,i));
 		}
 		// threads.push_back(thread(multipleMPHF,datas,(nthreads)*(nMphfByBucket/nthreads),nMphfByBucket-(nthreads)*(nMphfByBucket/nthreads),i));
 
@@ -623,13 +623,13 @@ int main (int argc, char* argv[]){
 
 		double integ;
 
-		// assert(  modf((double)nBuckets/nthreads ,&integ) == 0  );
-		// vector<thread> threads;
-		// for(uint n(0);n<nthreads;++n){
-		// 	threads.push_back(thread(compactBucket,n*nBuckets/nthreads,nBuckets/nthreads));
-		// }
-		// for(auto &t : threads){t.join();}
-		compactBucket(0, nBuckets);
+		assert(  modf((double)nBuckets/nthreads ,&integ) == 0  );
+		vector<thread> threads;
+		for(uint n(0);n<nthreads;++n){
+			threads.push_back(thread(compactBucket,n*nBuckets/nthreads,nBuckets/nthreads));
+		}
+		for(auto &t : threads){t.join();}
+		//~ compactBucket(0, nBuckets);
 
 		for(uint i(0);i<nBuckets;++i){
 			remove(("bucket"+to_string(i)).c_str());
