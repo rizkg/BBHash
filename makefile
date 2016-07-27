@@ -15,7 +15,7 @@ endif
 
 
 test:
-	./Bootest 10000 1 -check
+	./Bootest 10000 1 2 -check
 all: $(EXEC)
 
 example: example.cpp
