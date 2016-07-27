@@ -18,6 +18,8 @@ class Custom_uint64_Hasher
 {
 public:
 	// the class should have operator () with this signature :
+	// BBhash will use the 'seed' paramater to generate two different hash values form this key.
+     //then it will generate internally a sequence of hash values using xorshifts, using these two first hash values as starting point.
 	uint64_t operator ()   (uint64_t key, uint64_t seed=0) const
 	{
 		
