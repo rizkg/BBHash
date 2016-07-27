@@ -452,9 +452,9 @@ int main (int argc, char* argv[]){
 	bool bench_lookup_out = false;
 	bool on_the_fly= false;
 	
-	if(argc <3 ){
+	if(argc <4 ){
 		printf("Usage :\n");
-		printf("%s <nelem> <nthreads>  [options]\n",argv[0]);
+		printf("%s <nelem> <nthreads> <gamma>  [options]\n",argv[0]);
 		printf("Options:\n");
 		printf("\t-check\n");
 		printf("\t-bench\n");
@@ -464,14 +464,16 @@ int main (int argc, char* argv[]){
 		printf("\t-buckets\n");
 		printf("\t-outquery\n");  // bench fp rate
 		printf("\t-onthefly\n"); //will generate keys on the fly without storing them at all in ram or on disk
+	
 
 
 		return EXIT_FAILURE;
 	}
 
-	if(argc >=3 ){
+	if(argc >=4 ){
 		nelem = strtoul(argv[1], NULL,0);
 		nthreads = atoi(argv[2]);
+		gammaFactor = atoi(argv[3]);
 	}
 
 	for (int ii=3; ii<argc; ii++){
