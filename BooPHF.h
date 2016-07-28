@@ -748,7 +748,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			if(_fastmode)
 				_progressBar.init( _nelem * (_fastModeLevel+1) +  ( _nelem * pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))    ,"Building BooPHF",num_thread);
 			else
-				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF");
+				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF",num_thread);
 			}
 
 			uint64_t offset = 0;
