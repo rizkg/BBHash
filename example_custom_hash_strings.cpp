@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <random>
 #include <algorithm>
+#include <fstream>
 
 using namespace std;
 
@@ -73,15 +74,19 @@ int main (int argc, char* argv[]){
 	uint64_t ii, jj;
 	std::vector<std::string> data;
 
-	int string_size = 100;
+	int string_size = 18;
 	/////  generation of random strings
 	
 	char * tempchar = (char *) malloc(sizeof(string_size)*sizeof(char));
-	
+	string lolstr;
+	ifstream inputfile("StringFile.txt",ios::in);
 	for (u_int64_t i = 0; i < nelem; i++){
-		gen_random(tempchar,string_size);
-		data.push_back(  std::string(tempchar));
-		//printf("%s\n",data[i].c_str());
+		//RANDOM STRINGS
+		//~ gen_random(tempchar,string_size);
+		//~ data.push_back((string)tempchar);
+		//STRING READ FROM FILE
+		getline(inputfile,lolstr);
+		data.push_back(lolstr);
 	}
 	
 	
@@ -111,10 +116,14 @@ int main (int argc, char* argv[]){
 	
 	printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
 	printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
-	
+	gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 	//query mphf like this
-	uint64_t  idx = bphf->lookup(data[0]);
-	printf(" example query  %s ----->  %llu \n",data[0].c_str(),idx);
+	for (u_int64_t i = 0; i < 1000000; i++){
+		uint64_t  idx = bphf->lookup(data[i]);
+	}
+	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
+	double elapsed2 = t_end - t_begin;
+	printf("Query of 1M key  in %.2fs\n", nelem,elapsed2);
 	
 	delete bphf;
 	return EXIT_SUCCESS;
