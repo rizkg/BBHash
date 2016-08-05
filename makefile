@@ -1,7 +1,7 @@
 # CC=/usr/bin/g++
 CXX ?= g++
 CFLAGS = -O3 -std=c++11 -lpthread
-EXEC=Bootest example
+EXEC=Bootest example example_custom_hash example_custom_hash_strings
 all: $(EXEC)
 
 ifeq ($(prof),1)
@@ -15,10 +15,16 @@ endif
 
 
 test:
-	./Bootest 10000 1 -check
+	./Bootest 10000 1 2 -check
 all: $(EXEC)
 
 example: example.cpp
+	$(CXX) -o $@  $^ $(CFLAGS)
+
+example_custom_hash: example_custom_hash.cpp
+	$(CXX) -o $@  $^ $(CFLAGS)
+
+example_custom_hash_strings: example_custom_hash_strings.cpp
 	$(CXX) -o $@  $^ $(CFLAGS)
 
 Bootest:  bootest.cpp

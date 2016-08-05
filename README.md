@@ -6,6 +6,22 @@ It is designed to handle large scale datasets. The function is just a little bit
 
 It is easy to include in other projects (just include a single .h file) and has no dependencies.
 
+# Usage
+Here is a simple example showing how to build and query a mphf with input keys in a std::vector<u_int64_t> . Input keys can also be read from a disk file, or from some user-defined iterator.
+
+     #include "BooPHF.h"
+     //tells bbhash to use included hash function working on u_int64_t input keys :
+     typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
+     typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
+     
+    std::vector<u_int64_t> input_keys;
+    //
+    ... fill the input_keys vector
+    //build the mphf  
+    boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(input_keys.size(),input_keys,nthreads);
+     
+     //query the mphf :
+     uint64_t  idx = bphf->lookup(input_keys[0]);
 
 # How to run test
 

@@ -734,6 +734,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		{
 			if(n ==0) return;
 			
+			_fastmode = false;
+			
 			if(_percent_elem_loaded_for_fastMode > 0.0 )
 				_fastmode =true;
 
@@ -746,7 +748,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			if(_fastmode)
 				_progressBar.init( _nelem * (_fastModeLevel+1) +  ( _nelem * pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))    ,"Building BooPHF",num_thread);
 			else
-				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF");
+				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF",num_thread);
 			}
 
 			uint64_t offset = 0;
@@ -849,7 +851,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			auto until = *until_p;
 			uint64_t inbuff =0;
 
-
 			
 			for (bool isRunning=true;  isRunning ; )
 			{
@@ -877,8 +878,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 					{
 							__sync_fetch_and_add(& _cptLevel,1);
 
-						if(i == _fastModeLevel && _fastmode)
+						if(_fastmode && i == _fastModeLevel)
 						{
+
 							uint64_t idxl2 = __sync_fetch_and_add(& _idxLevelsetLevelFastmode,1);
 							//si depasse taille attendue pour setLevelFastmode, fall back sur slow mode mais devrait pas arriver si hash ok et proba avec nous
 							if(idxl2>= setLevelFastmode.size())
@@ -890,6 +892,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 						//insert to level i+1 : either next level of the cascade or final hash if last level reached
 						if(i == _nb_levels-1) //stop cascade here, insert into exact hash
 						{
+
 							uint64_t hashidx =  __sync_fetch_and_add (& _hashidx, 1);
 
 							pthread_mutex_lock(&_mutex); //see later if possible to avoid this, mais pas bcp item vont la
@@ -899,6 +902,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 						}
 						else
 						{
+
 							//computes next hash
 
 							if ( level == 0)
@@ -1045,12 +1049,10 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				 if(pow(_proba_collision,ii) < _percent_elem_loaded_for_fastMode)
 				 {
 				 	_fastModeLevel = ii;
-				 	// printf("fast mode level :  %i \n",ii);
+				 	 //printf("fast mode level :  %i \n",ii);
 				 	break;
 				 }
 			}
-
-
 		}
 
 
@@ -1121,7 +1123,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.end()));
 
 			t_arg.level = i;
-			if(i >= (_fastModeLevel+1) && _fastmode)
+			if(_fastmode && i >= (_fastModeLevel+1))
 			{
 				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevelFastmode[0]), static_cast<const elem_t*>( (&setLevelFastmode[0]) +setLevelFastmode.size()));
                 typedef decltype(data_iterator.begin()) fastmode_it_type;
@@ -1144,9 +1146,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			{
 				pthread_join(tab_threads[ii], NULL);
 			}
-		//	printf("\ngoing to level %i  : %llu elems  %.2f %%  expected : %.2f %% \n",i,_cptLevel,100.0* _cptLevel/(float)_nelem,100.0* pow(_proba_collision,i) );
+			//printf("\ngoing to level %i  : %llu elems  %.2f %%  expected : %.2f %% \n",i,_cptLevel,100.0* _cptLevel/(float)_nelem,100.0* pow(_proba_collision,i) );
 
-			if(i == _fastModeLevel) //shrink to actual number of elements in set
+			if(_fastmode && i == _fastModeLevel) //shrink to actual number of elements in set
 			{
 				//printf("resize setLevelFastmode to %lli \n",_idxLevelsetLevelFastmode);
 				setLevelFastmode.resize(_idxLevelsetLevelFastmode);

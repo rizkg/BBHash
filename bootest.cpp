@@ -338,8 +338,8 @@ void compactBucket(uint start, uint n){
 		}
 
 		vector<thread> threads;
-		for(uint tn(0);tn<nthreads;++tn){
-			threads.push_back(thread(multipleMPHF,datas,tn*(nMphfByBucket/nthreads),nMphfByBucket/nthreads,i));
+		for(uint tn(0);tn<1;++tn){
+			threads.push_back(thread(multipleMPHF,datas,tn*(nMphfByBucket/1),nMphfByBucket/1,i));
 		}
 		// threads.push_back(thread(multipleMPHF,datas,(nthreads)*(nMphfByBucket/nthreads),nMphfByBucket-(nthreads)*(nMphfByBucket/nthreads),i));
 
@@ -452,9 +452,9 @@ int main (int argc, char* argv[]){
 	bool bench_lookup_out = false;
 	bool on_the_fly= false;
 	
-	if(argc <3 ){
+	if(argc <4 ){
 		printf("Usage :\n");
-		printf("%s <nelem> <nthreads>  [options]\n",argv[0]);
+		printf("%s <nelem> <nthreads> <gamma>  [options]\n",argv[0]);
 		printf("Options:\n");
 		printf("\t-check\n");
 		printf("\t-bench\n");
@@ -464,14 +464,16 @@ int main (int argc, char* argv[]){
 		printf("\t-buckets\n");
 		printf("\t-outquery\n");  // bench fp rate
 		printf("\t-onthefly\n"); //will generate keys on the fly without storing them at all in ram or on disk
+	
 
 
 		return EXIT_FAILURE;
 	}
 
-	if(argc >=3 ){
+	if(argc >=4 ){
 		nelem = strtoul(argv[1], NULL,0);
 		nthreads = atoi(argv[2]);
+		gammaFactor = atoi(argv[3]);
 	}
 
 	for (int ii=3; ii<argc; ii++){
@@ -623,13 +625,13 @@ int main (int argc, char* argv[]){
 
 		double integ;
 
-		// assert(  modf((double)nBuckets/nthreads ,&integ) == 0  );
-		// vector<thread> threads;
-		// for(uint n(0);n<nthreads;++n){
-		// 	threads.push_back(thread(compactBucket,n*nBuckets/nthreads,nBuckets/nthreads));
-		// }
-		// for(auto &t : threads){t.join();}
-		compactBucket(0, nBuckets);
+		assert(  modf((double)nBuckets/nthreads ,&integ) == 0  );
+		vector<thread> threads;
+		for(uint n(0);n<nthreads;++n){
+			threads.push_back(thread(compactBucket,n*nBuckets/nthreads,nBuckets/nthreads));
+		}
+		for(auto &t : threads){t.join();}
+		//~ compactBucket(0, nBuckets);
 
 		for(uint i(0);i<nBuckets;++i){
 			remove(("bucket"+to_string(i)).c_str());
@@ -676,17 +678,47 @@ int main (int argc, char* argv[]){
 
 		if(bench_lookup)
 		{
-			auto data_iterator = file_binary("benchfile");
-			u_int64_t dumb=0;
-			begin = clock();
-			for (auto const& key: data_iterator) {
-				uint64_t hash=korenXor(key)%(nBuckets*nMphfByBucket);
-				u_int64_t mphf_value = MPHFs[hash].lookup(key) +  nb_elem_in_previous_buckets [hash];
-				dumb+= mphf_value;
-			}
-			end = clock();
 
-			printf("Buckets BooPHF %llu lookups in  %.2fs,  approx  %.2f ns per lookup   (fingerprint %llu)  \n", nb_in_bench_file, (double)(end - begin) / CLOCKS_PER_SEC,  ((double)(end - begin) / CLOCKS_PER_SEC)*1000000000/nb_in_bench_file,dumb);
+			auto input_range = file_binary("benchfile");
+
+			vector<u_int64_t> sample;
+			u_int64_t mphf_value;
+			
+			//copy sample in ram
+			for (auto const& key: input_range) {
+				sample.push_back(key);
+			}
+			
+			printf("bench lookups  sample size %lu \n",sample.size());
+			//bench procedure taken from emphf
+			stats_accumulator stats;
+			double tick = get_time_usecs();
+			size_t lookups = 0;
+			static const size_t lookups_per_sample = 1 << 16;
+			u_int64_t dumb=0;
+			double elapsed;
+			size_t runs = 10;
+			
+			for (size_t run = 0; run < runs; ++run) {
+				for (size_t ii = 0; ii < sample.size(); ++ii) {
+					
+					uint64_t hash=korenXor(sample[ii])%(nBuckets*nMphfByBucket);
+					mphf_value = MPHFs[hash].lookup(sample[ii]) +  nb_elem_in_previous_buckets [hash];
+					dumb+= mphf_value;
+					
+					//do some silly work
+					
+					if (++lookups == lookups_per_sample) {
+						elapsed = get_time_usecs() - tick;
+						stats.add(elapsed / (double)lookups);
+						tick = get_time_usecs();
+						lookups = 0;
+					}
+				}
+			}
+			printf("BBhash buckets bench lookups average %.2f ns +- stddev  %.2f %%   (fingerprint %llu)  \n", 1000.0*stats.mean(),stats.relative_stddev(),dumb);
+			
+			///
 		}
 
 
