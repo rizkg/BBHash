@@ -54,6 +54,7 @@ namespace boomphf {
 		
 		bfile_iterator(FILE* is): _is(is) , _pos(0) ,_inbuff (0), _cptread(0)
 		{
+			//printf("bf it %p\n",_is);
 			_buffsize = 10000;
 			_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
 			int reso = fseek(_is,0,SEEK_SET);
@@ -86,11 +87,18 @@ namespace boomphf {
 	private:
 		void advance()
 		{
+			
+			//printf("_cptread %i _inbuff %i \n",_cptread,_inbuff);
+			
 			_pos++;
 			
 			if(_cptread >= _inbuff)
 			{
+				printf("ftell pos %ld \n",ftell(_is));
 				int res = fread(_buffer,sizeof(u_int64_t),_buffsize,_is);
+				printf("ftell pos %ld \n",ftell(_is));
+
+				printf("read %i new elem last %llu  %p\n",res,_buffer[res-1],_is);
 				_inbuff = res; _cptread = 0;
 				
 				if(res == 0)
@@ -120,6 +128,12 @@ namespace boomphf {
 		file_binary(const char* filename)
 		{
 			_is = fopen(filename, "rb");
+			
+			fseek(_is, 0L, SEEK_END);
+			auto sz = ftell(_is);
+			fseek(_is, 0L, SEEK_SET);
+			
+			printf("just opened %p  size %ld  nb elemes %ld\n",_is,sz , sz / sizeof(u_int64_t));
 			if (!_is) {
 				throw std::invalid_argument("Error opening " + std::string(filename));
 			}
@@ -814,7 +828,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 ////////////////////////////////////////////////////////////////
 
 
-#define NBBUFF 10000
+//#define NBBUFF 10000
+#define NBBUFF 2
 
 	template<typename Range,typename Iterator>
 	struct thread_args
@@ -884,12 +899,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 				processLevel(input_range,ii);
 
-				printf("loop %i \n",ii);
 				_levels[ii].bitset.clearCollisions(0 , _levels[ii].hash_domain , _tempBitset);
-
+				
 				offset = _levels[ii].bitset.build_ranks(offset);
-
-				printf("loop %i  delete _tempBitset \n",ii);
 
 				delete _tempBitset;
 			}
@@ -933,6 +945,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				else
 				{
 					minimal_hp =  in_final_map->second + _lastbitsetrank;
+					printf("lookup %llu  level %i   --> %llu \n",elem,level,minimal_hp);
+
 					return minimal_hp;
 				}
 //				minimal_hp = _final_hash[elem] + _lastbitsetrank;
@@ -942,8 +956,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			{
 				non_minimal_hp =  level_hash %  _levels[level].hash_domain; // in fact non minimal hp would be  + _levels[level]->idx_begin
 			}
-
 			minimal_hp = _levels[level].bitset.rank(non_minimal_hp );
+			printf("lookup %llu  level %i   --> %llu \n",elem,level,minimal_hp);
 
 			return minimal_hp;
 		}
@@ -992,15 +1006,19 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
                 for(; inbuff<NBBUFF && (*shared_it)!=until;  ++(*shared_it))
 				{
                     buffer[inbuff]= *(*shared_it); inbuff++;
+					printf("reading into buff %llu \n",*(*shared_it));
 				}
-                if((*shared_it)==until) isRunning =false;
+				if((*shared_it)==until) {printf("stopping iter --\n"); isRunning =false;}
 				pthread_mutex_unlock(&_mutex);
 
 
 				//do work on the n elems of the buffer
+			//	printf("filling input  buff \n");
+
                 for(uint64_t ii=0; ii<inbuff ; ii++)
 				{
 					elem_t val = buffer[ii];
+					printf("processing %llu  level %i\n",val, i);
 
 					//auto hashes = _hasher(val);
 					hash_pair_t bbhash;  int level;
@@ -1009,9 +1027,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 					
 					if(level == i) //insert into lvl i
 					{
+						
 							__sync_fetch_and_add(& _cptLevel,1);
 
 	
+						printf("... going to lvl %i \n",i);
+
 						
 						if(_fastmode && i == _fastModeLevel)
 						{
@@ -1038,24 +1059,31 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 						else
 						{
 							
+							//ils ont reach ce level
+							//insert elem into curr level on disk --> sera utilise au level+1 , (mais encore besoin filtre)
 							
-							//insert elem into next level on disk
-							
-							if(_writeEachLevel)
+							if(_writeEachLevel && i > 0 && i < _nb_levels -1)
 							{
-								if(writebuff<NBBUFF)
+								if(writebuff>=NBBUFF)
 								{
-									myWriteBuff[writebuff++] = val;
-								}
-								else
-								{
-									//printf("flush tid %i  : %llu  \n",tid,writebuff);
 									//flush buffer
-									flockfile(_nextlevelFile);
-									fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_nextlevelFile);
-									funlockfile(_nextlevelFile);
+									printf("flushing %llu elems \n",writebuff);
+									
+									for(int jj=0;jj<writebuff;jj++)
+									{
+										printf("%llu .\n",myWriteBuff[jj]);
+									}
+									
+									flockfile(_currlevelFile);
+									fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_currlevelFile);
+									funlockfile(_currlevelFile);
 									writebuff = 0;
+								
 								}
+								
+									printf("going to file S%i :  %llu \n",i,val);
+									myWriteBuff[writebuff++] = val;
+					
 							}
 							
 							
@@ -1085,13 +1113,19 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				inbuff = 0;
 			}
 			
-			
-			if(_writeEachLevel)
+			if(_writeEachLevel && writebuff>0)
 			{
 				//flush buffer
-				flockfile(_nextlevelFile);
-				fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_nextlevelFile);
-				funlockfile(_nextlevelFile);
+				printf("flushing %llu elems \n",writebuff);
+
+				for(int jj=0;jj<writebuff;jj++)
+				{
+					printf("%llu \n",myWriteBuff[jj]);
+				}
+				
+				flockfile(_currlevelFile);
+				fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_currlevelFile);
+				funlockfile(_currlevelFile);
 				writebuff = 0;
 			}
 
@@ -1211,7 +1245,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			double sum_geom =_gamma * ( 1.0 +  _proba_collision / (1.0 - _proba_collision));
 			printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
 
-			_nb_levels = 25;
+			_nb_levels = 5; //25
 			_levels.resize(_nb_levels);
 
 			//build levels
@@ -1296,29 +1330,29 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			////alloc the bitset for this level
 			_levels[i].bitset =  bitVector(_levels[i].hash_domain); ;
 
-			printf("process level %i   wr %i fast %i \n",i,_writeEachLevel,_fastmode);
+			printf("---process level %i   wr %i fast %i ---\n",i,_writeEachLevel,_fastmode);
 			
-			char fname_prev[1000];
-			sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-1);
+			char fname_old[1000];
+			sprintf(fname_old,"temp_p%i_level_%i",_pid,i-2);
 			
 			char fname_curr[1000];
 			sprintf(fname_curr,"temp_p%i_level_%i",_pid,i);
 			
-			char fname_next[1000];
-			sprintf(fname_next,"temp_p%i_level_%i",_pid,i+1);
+			char fname_prev[1000];
+			sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-1);
 			
 			if(_writeEachLevel)
 			{
 				//file management :
 				
-				if(i>1) //delete previous file
-				{
-					unlink(fname_prev);
-				}
+//				if(i>2) //delete previous file
+//				{
+//					unlink(fname_old);
+//				}
 				
-				if(i< _nb_levels-1) //create next file
+				if(i< _nb_levels-1 && i > 0 ) //create curr file
 				{
-					_nextlevelFile = fopen(fname_next,"w");
+					_currlevelFile = fopen(fname_curr,"w");
 				}
 			}
 			
@@ -1340,11 +1374,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			t_arg.level = i;
 			
 			
-			if(_writeEachLevel && (i > 0))
+			if(_writeEachLevel && (i > 1))
 			{
-				printf(" launch each level \n");
+				printf(" launch  level %i from file %s  \n",i,fname_prev);
 
-				auto data_iterator_level = file_binary(fname_curr);
+				auto data_iterator_level = file_binary(fname_prev);
 				
 				typedef decltype(data_iterator_level.begin()) disklevel_it_type;
 				
@@ -1356,7 +1390,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 					pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, disklevel_it_type>, &t_arg); //&t_arg[ii]
 			}
 			
-			
+			else
+			 
 			if(_fastmode && i >= (_fastModeLevel+1))
 			{
 				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevelFastmode[0]), static_cast<const elem_t*>( (&setLevelFastmode[0]) +setLevelFastmode.size()));
@@ -1391,17 +1426,18 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			if(_writeEachLevel)
 			{
-				if(i< _nb_levels-1)
-					fclose(_nextlevelFile);
-					
-					if(i== _nb_levels- 1) //delete last file
-					{
-						char fname[1000];
-						sprintf(fname,"temp_p%i_level_%i",_pid,i);
-						unlink(fname);
-					}
+				if(i< _nb_levels-1 && i>0)
+				{
+					fflush(_currlevelFile);
+					printf("closing file %s \n",fname_curr);
+					fclose(_currlevelFile);
+				}
+				
+//					if(i== _nb_levels- 1) //delete last file
+//					{
+//						unlink(fname_prev);
+//					}
 			}
-			printf(" End process level %i \n",i);
 
 		}
 
@@ -1437,7 +1473,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		bool _withprogress;
 		bool _built;
 		bool _writeEachLevel;
-		FILE * _nextlevelFile;
+		FILE * _currlevelFile;
 		int _pid;
 	public:
 		pthread_mutex_t _mutex;

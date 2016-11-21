@@ -371,7 +371,9 @@ int check_mphf_correctness (phf_t * bphf, Range const& input_range){
 			}
 			else
 			{
-				printf("collision for val %lli \n",mphf_value);
+				//printf("collision for val %lli : \n",mphf_value);
+				printf("collision for %llu  mphf_value %llu\n",val,mphf_value);
+
 				nb_collision_detected++;
 			}
 		}
@@ -544,6 +546,7 @@ int main (int argc, char* argv[]){
 			for (u_int64_t i = 0; i < nelem; i++)
 			{
 				fwrite(&current, sizeof(u_int64_t), 1, key_file);
+				printf("%llu \n",current);
 				current = current + step;
 			}
 			fclose(key_file);
