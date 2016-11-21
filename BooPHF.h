@@ -16,15 +16,136 @@
 #include <sys/time.h>
 #include <string.h>
 #include <memory> // for make_shared
+#include <unistd.h>
 
 
 namespace boomphf {
 
+	
 ////////////////////////////////////////////////////////////////
 #pragma mark -
 #pragma mark utils
 ////////////////////////////////////////////////////////////////
 
+	
+	// iterator from disk file of u_int64_t with buffered read,   todo template
+	class bfile_iterator : public std::iterator<std::forward_iterator_tag, u_int64_t>{
+	public:
+		
+		bfile_iterator()
+		: _is(nullptr)
+		, _pos(0) ,_inbuff (0), _cptread(0)
+		{
+			_buffsize = 10000;
+			_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
+		}
+		
+		bfile_iterator(const bfile_iterator& cr)
+		{
+			_buffsize = cr._buffsize;
+			_pos = cr._pos;
+			_is = cr._is;
+			_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
+		 memcpy(_buffer,cr._buffer,_buffsize*sizeof(u_int64_t) );
+			_inbuff = cr._inbuff;
+			_cptread = cr._cptread;
+			_elem = cr._elem;
+		}
+		
+		bfile_iterator(FILE* is): _is(is) , _pos(0) ,_inbuff (0), _cptread(0)
+		{
+			_buffsize = 10000;
+			_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
+			int reso = fseek(_is,0,SEEK_SET);
+			advance();
+		}
+		
+		~bfile_iterator()
+		{
+			if(_buffer!=NULL)
+				free(_buffer);
+		}
+		
+		
+		u_int64_t const& operator*()  {  return _elem;  }
+		
+		bfile_iterator& operator++()
+		{
+			advance();
+			return *this;
+		}
+		
+		friend bool operator==(bfile_iterator const& lhs, bfile_iterator const& rhs)
+		{
+			if (!lhs._is || !rhs._is)  {  if (!lhs._is && !rhs._is) {  return true; } else {  return false;  } }
+			assert(lhs._is == rhs._is);
+			return rhs._pos == lhs._pos;
+		}
+		
+		friend bool operator!=(bfile_iterator const& lhs, bfile_iterator const& rhs)  {  return !(lhs == rhs);  }
+	private:
+		void advance()
+		{
+			_pos++;
+			
+			if(_cptread >= _inbuff)
+			{
+				int res = fread(_buffer,sizeof(u_int64_t),_buffsize,_is);
+				_inbuff = res; _cptread = 0;
+				
+				if(res == 0)
+				{
+					_is = nullptr;
+					_pos = 0;
+					return;
+				}
+			}
+			
+			_elem = _buffer[_cptread];
+			_cptread ++;
+		}
+		u_int64_t _elem;
+		FILE * _is;
+		unsigned long _pos;
+		
+		u_int64_t * _buffer; // for buffered read
+		int _inbuff, _cptread;
+		int _buffsize;
+	};
+	
+	
+	class file_binary{
+	public:
+		
+		file_binary(const char* filename)
+		{
+			_is = fopen(filename, "rb");
+			if (!_is) {
+				throw std::invalid_argument("Error opening " + std::string(filename));
+			}
+		}
+		
+		~file_binary()
+		{
+			fclose(_is);
+		}
+		
+		bfile_iterator begin() const
+		{
+			return bfile_iterator(_is);
+		}
+		
+		bfile_iterator end() const {return bfile_iterator(); }
+		
+		size_t        size () const  {  return 0;  }//todo ?
+		
+	private:
+		FILE * _is;
+	};
+
+	
+	
+	
 	inline unsigned int popcount_32(unsigned int x)
 	{
 		unsigned int m1 = 0x55555555;
@@ -552,7 +673,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		//return value at pos
 		uint64_t operator[](uint64_t pos) const
 		{
+			//unsigned char * _bitArray8 = (unsigned char *) _bitArray;
+			//return (_bitArray8[pos >> 3ULL] >> (pos & 7 ) ) & 1;
+
 			return (_bitArray[pos >> 6ULL] >> (pos & 63 ) ) & 1;
+
 		}
 
 		//atomically   return old val and set to 1
@@ -620,6 +745,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 			return r;
 		}
+
 
 
 		void save(std::ostream& os) const
@@ -758,9 +884,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 				processLevel(input_range,ii);
 
+				printf("loop %i \n",ii);
 				_levels[ii].bitset.clearCollisions(0 , _levels[ii].hash_domain , _tempBitset);
 
 				offset = _levels[ii].bitset.build_ranks(offset);
+
+				printf("loop %i  delete _tempBitset \n",ii);
 
 				delete _tempBitset;
 			}
@@ -851,6 +980,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			auto until = *until_p;
 			uint64_t inbuff =0;
 
+			uint64_t writebuff =0;
+			std::vector< elem_t > & myWriteBuff = bufferperThread[tid];
+
 			
 			for (bool isRunning=true;  isRunning ; )
 			{
@@ -874,10 +1006,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 					hash_pair_t bbhash;  int level;
 					uint64_t level_hash = getLevel(bbhash,val,&level, i);
 
+					
 					if(level == i) //insert into lvl i
 					{
 							__sync_fetch_and_add(& _cptLevel,1);
 
+	
+						
 						if(_fastmode && i == _fastModeLevel)
 						{
 
@@ -902,7 +1037,32 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 						}
 						else
 						{
-
+							
+							
+							//insert elem into next level on disk
+							
+							if(_writeEachLevel)
+							{
+								if(writebuff<NBBUFF)
+								{
+									myWriteBuff[writebuff++] = val;
+								}
+								else
+								{
+									//printf("flush tid %i  : %llu  \n",tid,writebuff);
+									//flush buffer
+									flockfile(_nextlevelFile);
+									fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_nextlevelFile);
+									funlockfile(_nextlevelFile);
+									writebuff = 0;
+								}
+							}
+							
+							
+							
+							
+							
+							
 							//computes next hash
 
 							if ( level == 0)
@@ -924,10 +1084,20 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 				inbuff = 0;
 			}
+			
+			
+			if(_writeEachLevel)
+			{
+				//flush buffer
+				flockfile(_nextlevelFile);
+				fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_nextlevelFile);
+				funlockfile(_nextlevelFile);
+				writebuff = 0;
+			}
 
 		}
 
-
+		
 		void save(std::ostream& os) const
 		{
 
@@ -1016,13 +1186,30 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			pthread_mutex_init(&_mutex, NULL);
 
 
-			if(_fastmode)
-				setLevelFastmode.resize(_percent_elem_loaded_for_fastMode * (double)_nelem );
+			_pid = getpid();
 
+			_writeEachLevel =true;
+			_fastmode = false;
+			
+			if(_fastmode)
+			{
+				setLevelFastmode.resize(_percent_elem_loaded_for_fastMode * (double)_nelem );
+			}
+
+			
+			bufferperThread.resize(_num_thread);
+			if(_writeEachLevel)
+			{
+				for(int ii=0; ii<_num_thread; ii++)
+				{
+					bufferperThread[ii].resize(NBBUFF);
+				}
+			}
+			
 			_proba_collision = 1.0 -  pow(((_gamma*(double)_nelem -1 ) / (_gamma*(double)_nelem)),_nelem-1);
 
 			double sum_geom =_gamma * ( 1.0 +  _proba_collision / (1.0 - _proba_collision));
-			// printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
+			printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
 
 			_nb_levels = 25;
 			_levels.resize(_nb_levels);
@@ -1109,6 +1296,33 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			////alloc the bitset for this level
 			_levels[i].bitset =  bitVector(_levels[i].hash_domain); ;
 
+			printf("process level %i   wr %i fast %i \n",i,_writeEachLevel,_fastmode);
+			
+			char fname_prev[1000];
+			sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-1);
+			
+			char fname_curr[1000];
+			sprintf(fname_curr,"temp_p%i_level_%i",_pid,i);
+			
+			char fname_next[1000];
+			sprintf(fname_next,"temp_p%i_level_%i",_pid,i+1);
+			
+			if(_writeEachLevel)
+			{
+				//file management :
+				
+				if(i>1) //delete previous file
+				{
+					unlink(fname_prev);
+				}
+				
+				if(i< _nb_levels-1) //create next file
+				{
+					_nextlevelFile = fopen(fname_next,"w");
+				}
+			}
+			
+			
 			_cptLevel = 0;
 			_hashidx = 0;
 			_idxLevelsetLevelFastmode =0;
@@ -1122,7 +1336,27 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.begin()));
 			t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<it_type>(input_range.end()));
 
+
 			t_arg.level = i;
+			
+			
+			if(_writeEachLevel && (i > 0))
+			{
+				printf(" launch each level \n");
+
+				auto data_iterator_level = file_binary(fname_curr);
+				
+				typedef decltype(data_iterator_level.begin()) disklevel_it_type;
+				
+				//data_iterator_level.begin();
+				t_arg.it_p = std::static_pointer_cast<void>(std::make_shared<disklevel_it_type>(data_iterator_level.begin()));
+				t_arg.until_p = std::static_pointer_cast<void>(std::make_shared<disklevel_it_type>(data_iterator_level.end()));
+				
+				for(int ii=0;ii<_num_thread;ii++)
+					pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, disklevel_it_type>, &t_arg); //&t_arg[ii]
+			}
+			
+			
 			if(_fastmode && i >= (_fastModeLevel+1))
 			{
 				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevelFastmode[0]), static_cast<const elem_t*>( (&setLevelFastmode[0]) +setLevelFastmode.size()));
@@ -1150,10 +1384,25 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 			if(_fastmode && i == _fastModeLevel) //shrink to actual number of elements in set
 			{
-				//printf("resize setLevelFastmode to %lli \n",_idxLevelsetLevelFastmode);
+				//printf("\nresize setLevelFastmode to %lli \n",_idxLevelsetLevelFastmode);
 				setLevelFastmode.resize(_idxLevelsetLevelFastmode);
 			}
 			delete [] tab_threads;
+			
+			if(_writeEachLevel)
+			{
+				if(i< _nb_levels-1)
+					fclose(_nextlevelFile);
+					
+					if(i== _nb_levels- 1) //delete last file
+					{
+						char fname[1000];
+						sprintf(fname,"temp_p%i_level_%i",_pid,i);
+						unlink(fname);
+					}
+			}
+			printf(" End process level %i \n",i);
+
 		}
 
 	private:
@@ -1180,9 +1429,16 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		float _percent_elem_loaded_for_fastMode ;
 		bool _fastmode;
 		std::vector< elem_t > setLevelFastmode;
+	//	std::vector< elem_t > setLevelFastmode_next; // todo shrinker le set e nram a chaque niveau  ?
+		
+		std::vector< std::vector< elem_t > > bufferperThread;
+
 		int _fastModeLevel;
 		bool _withprogress;
 		bool _built;
+		bool _writeEachLevel;
+		FILE * _nextlevelFile;
+		int _pid;
 	public:
 		pthread_mutex_t _mutex;
 	};

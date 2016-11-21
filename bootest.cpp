@@ -476,7 +476,7 @@ int main (int argc, char* argv[]){
 		gammaFactor = atoi(argv[3]);
 	}
 
-	for (int ii=3; ii<argc; ii++){
+	for (int ii=4; ii<argc; ii++){
 		if(!strcmp("-check",argv[ii])) check_correctness= true;
 		if(!strcmp("-bench",argv[ii])) bench_lookup= true;
 		if(!strcmp("-save",argv[ii])) save_mphf= true;
