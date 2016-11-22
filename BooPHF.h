@@ -876,7 +876,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 					if(level == i) //insert into lvl i
 					{
-							__sync_fetch_and_add(& _cptLevel,1);
+						//	__sync_fetch_and_add(& _cptLevel,1);
 
 						if(_fastmode && i == _fastModeLevel)
 						{
