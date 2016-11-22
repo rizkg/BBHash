@@ -453,7 +453,7 @@ int main (int argc, char* argv[]){
 	bool from_disk = true;
 	bool bench_lookup_out = false;
 	bool on_the_fly= false;
-	
+	bool write_each = false;
 	if(argc <4 ){
 		printf("Usage :\n");
 		printf("%s <nelem> <nthreads> <gamma>  [options]\n",argv[0]);
@@ -487,6 +487,7 @@ int main (int argc, char* argv[]){
 		if(!strcmp("-buckets",argv[ii])) buckets= true;
 		if(!strcmp("-outquery",argv[ii])) bench_lookup_out= true;
 		if(!strcmp("-onthefly",argv[ii])) on_the_fly= true;
+		if(!strcmp("-each",argv[ii])) write_each= true;
 
 	}
 
@@ -546,7 +547,7 @@ int main (int argc, char* argv[]){
 			for (u_int64_t i = 0; i < nelem; i++)
 			{
 				fwrite(&current, sizeof(u_int64_t), 1, key_file);
-				printf("%llu \n",current);
+				//printf("%llu \n",current);
 				current = current + step;
 			}
 			fclose(key_file);
@@ -667,7 +668,7 @@ int main (int argc, char* argv[]){
 				}
 				else
 				{
-					printf("collision for val %lli \n",mphf_value);
+					//printf("collision for val %lli \n",mphf_value);
 					nb_collision_detected++;
 				}
 				current2 += step2;
@@ -749,17 +750,17 @@ int main (int argc, char* argv[]){
 		if (on_the_fly)
 		{
 			auto data_iterator =  uint64_range(nelem,nelem) ;
-			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
+			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);
 		}
 		else if(from_disk)
 		{
 			auto data_iterator = file_binary("keyfile");
-			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
+			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);
 		}
 		else
 		{
 			auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
-			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
+			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);
 		}
 
 		gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);

@@ -94,11 +94,10 @@ namespace boomphf {
 			
 			if(_cptread >= _inbuff)
 			{
-				printf("ftell pos %ld \n",ftell(_is));
-				int res = fread(_buffer,sizeof(u_int64_t),_buffsize,_is);
-				printf("ftell pos %ld \n",ftell(_is));
 
-				printf("read %i new elem last %llu  %p\n",res,_buffer[res-1],_is);
+				int res = fread(_buffer,sizeof(u_int64_t),_buffsize,_is);
+
+				//printf("read %i new elem last %llu  %p\n",res,_buffer[res-1],_is);
 				_inbuff = res; _cptread = 0;
 				
 				if(res == 0)
@@ -128,12 +127,7 @@ namespace boomphf {
 		file_binary(const char* filename)
 		{
 			_is = fopen(filename, "rb");
-			
-			fseek(_is, 0L, SEEK_END);
-			auto sz = ftell(_is);
-			fseek(_is, 0L, SEEK_SET);
-			
-			printf("just opened %p  size %ld  nb elemes %ld\n",_is,sz , sz / sizeof(u_int64_t));
+
 			if (!_is) {
 				throw std::invalid_argument("Error opening " + std::string(filename));
 			}
@@ -828,8 +822,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 ////////////////////////////////////////////////////////////////
 
 
-//#define NBBUFF 10000
-#define NBBUFF 2
+#define NBBUFF 10000
+//#define NBBUFF 2
 
 	template<typename Range,typename Iterator>
 	struct thread_args
@@ -870,26 +864,49 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		
 		// allow perc_elem_loaded  elements to be loaded in ram for faster construction (default 3%), set to 0 to desactivate
 		template <typename Range>
-		mphf( size_t n, Range const& input_range,int num_thread = 1,  double gamma = 2.0 , bool progress =true, float perc_elem_loaded = 0.03) :
+		mphf( size_t n, Range const& input_range,int num_thread = 1,  double gamma = 2.0 , bool writeEach =false, bool progress =true, float perc_elem_loaded = 0.03) :
 		_gamma(gamma), _hash_domain(size_t(ceil(double(n) * gamma))), _nelem(n), _num_thread(num_thread), _percent_elem_loaded_for_fastMode (perc_elem_loaded), _withprogress(progress)
 		{
 			if(n ==0) return;
 			
 			_fastmode = false;
 			
+
+			
 			if(_percent_elem_loaded_for_fastMode > 0.0 )
 				_fastmode =true;
 
+			
+			if(writeEach)
+			{
+				_writeEachLevel =true;
+				_fastmode = false;
+			}
+			
 			setup();
 
 			if(_withprogress)
 			{
-			_progressBar.timer_mode=1;
+				_progressBar.timer_mode=1;
+				
+				
+				double total_raw = _nb_levels;
+				
+				double sum_geom_read =  ( 1.0 / (1.0 - _proba_collision));
+				double total_writeEach = sum_geom_read + 1.0;
 
-			if(_fastmode)
-				_progressBar.init( _nelem * (_fastModeLevel+1) +  ( _nelem * pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))    ,"Building BooPHF",num_thread);
-			else
-				_progressBar.init( _nelem * _nb_levels ,"Building BooPHF",num_thread);
+				double total_fastmode_ram =  (_fastModeLevel+1) +  ( pow(_proba_collision,_fastModeLevel)) * (_nb_levels-(_fastModeLevel+1))   ;
+				
+				printf("for info, total work write each  : %.3f    total work inram from level %i : %.3f  total work raw : %.3f \n",total_writeEach,_fastModeLevel,total_fastmode_ram,total_raw);
+
+				if(writeEach)
+				{
+					_progressBar.init(_nelem * total_writeEach,"Building BooPHF",num_thread);
+				}
+				else if(_fastmode)
+					_progressBar.init( _nelem * total_fastmode_ram    ,"Building BooPHF",num_thread);
+				else
+					_progressBar.init( _nelem * _nb_levels ,"Building BooPHF",num_thread);
 			}
 
 			uint64_t offset = 0;
@@ -945,7 +962,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				else
 				{
 					minimal_hp =  in_final_map->second + _lastbitsetrank;
-					printf("lookup %llu  level %i   --> %llu \n",elem,level,minimal_hp);
+					//printf("lookup %llu  level %i   --> %llu \n",elem,level,minimal_hp);
 
 					return minimal_hp;
 				}
@@ -957,7 +974,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				non_minimal_hp =  level_hash %  _levels[level].hash_domain; // in fact non minimal hp would be  + _levels[level]->idx_begin
 			}
 			minimal_hp = _levels[level].bitset.rank(non_minimal_hp );
-			printf("lookup %llu  level %i   --> %llu \n",elem,level,minimal_hp);
+		//	printf("lookup %llu  level %i   --> %llu \n",elem,level,minimal_hp);
 
 			return minimal_hp;
 		}
@@ -1006,9 +1023,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
                 for(; inbuff<NBBUFF && (*shared_it)!=until;  ++(*shared_it))
 				{
                     buffer[inbuff]= *(*shared_it); inbuff++;
-					printf("reading into buff %llu \n",*(*shared_it));
 				}
-				if((*shared_it)==until) {printf("stopping iter --\n"); isRunning =false;}
+				if((*shared_it)==until) isRunning =false;
 				pthread_mutex_unlock(&_mutex);
 
 
@@ -1018,12 +1034,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
                 for(uint64_t ii=0; ii<inbuff ; ii++)
 				{
 					elem_t val = buffer[ii];
-					printf("processing %llu  level %i\n",val, i);
+					//printf("processing %llu  level %i\n",val, i);
 
 					//auto hashes = _hasher(val);
 					hash_pair_t bbhash;  int level;
 					uint64_t level_hash = getLevel(bbhash,val,&level, i);
 
+					__sync_fetch_and_add(& _cptTotalProcessed,1);
 					
 					if(level == i) //insert into lvl i
 					{
@@ -1031,7 +1048,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 							__sync_fetch_and_add(& _cptLevel,1);
 
 	
-						printf("... going to lvl %i \n",i);
 
 						
 						if(_fastmode && i == _fastModeLevel)
@@ -1067,13 +1083,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 								if(writebuff>=NBBUFF)
 								{
 									//flush buffer
-									printf("flushing %llu elems \n",writebuff);
-									
-									for(int jj=0;jj<writebuff;jj++)
-									{
-										printf("%llu .\n",myWriteBuff[jj]);
-									}
-									
 									flockfile(_currlevelFile);
 									fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_currlevelFile);
 									funlockfile(_currlevelFile);
@@ -1081,7 +1090,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 								
 								}
 								
-									printf("going to file S%i :  %llu \n",i,val);
 									myWriteBuff[writebuff++] = val;
 					
 							}
@@ -1116,13 +1124,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			if(_writeEachLevel && writebuff>0)
 			{
 				//flush buffer
-				printf("flushing %llu elems \n",writebuff);
-
-				for(int jj=0;jj<writebuff;jj++)
-				{
-					printf("%llu \n",myWriteBuff[jj]);
-				}
-				
 				flockfile(_currlevelFile);
 				fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_currlevelFile);
 				funlockfile(_currlevelFile);
@@ -1221,9 +1222,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 
 			_pid = getpid();
+			_cptTotalProcessed=0;
 
-			_writeEachLevel =true;
-			_fastmode = false;
 			
 			if(_fastmode)
 			{
@@ -1245,7 +1245,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			double sum_geom =_gamma * ( 1.0 +  _proba_collision / (1.0 - _proba_collision));
 			printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
 
-			_nb_levels = 5; //25
+			_nb_levels = 25;
 			_levels.resize(_nb_levels);
 
 			//build levels
@@ -1330,7 +1330,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			////alloc the bitset for this level
 			_levels[i].bitset =  bitVector(_levels[i].hash_domain); ;
 
-			printf("---process level %i   wr %i fast %i ---\n",i,_writeEachLevel,_fastmode);
+			//printf("---process level %i   wr %i fast %i ---\n",i,_writeEachLevel,_fastmode);
 			
 			char fname_old[1000];
 			sprintf(fname_old,"temp_p%i_level_%i",_pid,i-2);
@@ -1345,10 +1345,10 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			{
 				//file management :
 				
-//				if(i>2) //delete previous file
-//				{
-//					unlink(fname_old);
-//				}
+				if(i>2) //delete previous file
+				{
+					unlink(fname_old);
+				}
 				
 				if(i< _nb_levels-1 && i > 0 ) //create curr file
 				{
@@ -1376,7 +1376,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			if(_writeEachLevel && (i > 1))
 			{
-				printf(" launch  level %i from file %s  \n",i,fname_prev);
 
 				auto data_iterator_level = file_binary(fname_prev);
 				
@@ -1388,35 +1387,47 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				
 				for(int ii=0;ii<_num_thread;ii++)
 					pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, disklevel_it_type>, &t_arg); //&t_arg[ii]
+			
+			
+				//must join here before the block is closed and file_binary is destroyed (and closes the file)
+				for(int ii=0;ii<_num_thread;ii++)
+				{
+					pthread_join(tab_threads[ii], NULL);
+				}
+				
 			}
 			
 			else
-			 
-			if(_fastmode && i >= (_fastModeLevel+1))
 			{
-				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevelFastmode[0]), static_cast<const elem_t*>( (&setLevelFastmode[0]) +setLevelFastmode.size()));
-                typedef decltype(data_iterator.begin()) fastmode_it_type;
-				t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(data_iterator.begin()));
-				t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(data_iterator.end()));
-
-                /* we'd like to do t_arg.it = data_iterator.begin() but types are different;
-                    so, casting to (void*) because of that; and we remember the type in the template */
-
-                for(int ii=0;ii<_num_thread;ii++)
-                    pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, fastmode_it_type>, &t_arg); //&t_arg[ii]
-			}
-			else
-			{
-			    for(int ii=0;ii<_num_thread;ii++)
-                    pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, decltype(input_range.begin())>, &t_arg); //&t_arg[ii]
-			}
-			//joining
-			for(int ii=0;ii<_num_thread;ii++)
-			{
-				pthread_join(tab_threads[ii], NULL);
+				if(_fastmode && i >= (_fastModeLevel+1))
+				{
+					auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevelFastmode[0]), static_cast<const elem_t*>( (&setLevelFastmode[0]) +setLevelFastmode.size()));
+					typedef decltype(data_iterator.begin()) fastmode_it_type;
+					t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(data_iterator.begin()));
+					t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(data_iterator.end()));
+					
+					/* we'd like to do t_arg.it = data_iterator.begin() but types are different;
+					 so, casting to (void*) because of that; and we remember the type in the template */
+					
+					for(int ii=0;ii<_num_thread;ii++)
+						pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, fastmode_it_type>, &t_arg); //&t_arg[ii]
+					
+					
+				}
+				else
+				{
+					for(int ii=0;ii<_num_thread;ii++)
+						pthread_create (&tab_threads[ii], NULL,  thread_processLevel<elem_t, Hasher_t, Range, decltype(input_range.begin())>, &t_arg); //&t_arg[ii]
+				}
+				//joining
+				for(int ii=0;ii<_num_thread;ii++)
+				{
+					pthread_join(tab_threads[ii], NULL);
+				}
 			}
 			//printf("\ngoing to level %i  : %llu elems  %.2f %%  expected : %.2f %% \n",i,_cptLevel,100.0* _cptLevel/(float)_nelem,100.0* pow(_proba_collision,i) );
 
+			//printf("\ncpt total processed %llu \n",_cptTotalProcessed);
 			if(_fastmode && i == _fastModeLevel) //shrink to actual number of elements in set
 			{
 				//printf("\nresize setLevelFastmode to %lli \n",_idxLevelsetLevelFastmode);
@@ -1429,14 +1440,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				if(i< _nb_levels-1 && i>0)
 				{
 					fflush(_currlevelFile);
-					printf("closing file %s \n",fname_curr);
 					fclose(_currlevelFile);
 				}
 				
-//					if(i== _nb_levels- 1) //delete last file
-//					{
-//						unlink(fname_prev);
-//					}
+					if(i== _nb_levels- 1) //delete last file
+					{
+						unlink(fname_prev);
+					}
 			}
 
 		}
@@ -1460,6 +1470,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		uint64_t _lastbitsetrank;
 		uint64_t _idxLevelsetLevelFastmode;
 		uint64_t _cptLevel;
+		uint64_t _cptTotalProcessed;
 
 		// fast build mode , requires  that _percent_elem_loaded_for_fastMode %   elems are loaded in ram
 		float _percent_elem_loaded_for_fastMode ;
