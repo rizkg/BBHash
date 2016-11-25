@@ -1038,7 +1038,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 					//auto hashes = _hasher(val);
 					hash_pair_t bbhash;  int level;
-					uint64_t level_hash = getLevel(bbhash,val,&level, i);
+					uint64_t level_hash = getLevel(bbhash,val,&level, i,i-1);
+					//uint64_t level_hash = getLevel(bbhash,val,&level, i);
 
 					//__sync_fetch_and_add(& _cptTotalProcessed,1);
 					
@@ -1278,12 +1279,14 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 
 		//compute level and returns hash of last level reached
-		uint64_t getLevel(hash_pair_t & bbhash, elem_t val,int * res_level, int maxlevel = 100)
+		uint64_t getLevel(hash_pair_t & bbhash, elem_t val,int * res_level, int maxlevel = 100, int minlevel =0)
+		//uint64_t getLevel(hash_pair_t & bbhash, elem_t val,int * res_level, int maxlevel = 100, int minlevel =0)
+
 		{
 			int level = 0;
 			uint64_t hash_raw=0;
 
-			for (int ii=0; ii<(_nb_levels-1) &&  ii < maxlevel ; ii++ )
+			for (int ii = 0; ii<(_nb_levels-1) &&  ii < maxlevel ; ii++ )
 			{
 
 				//calc le hash suivant
@@ -1297,7 +1300,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				}
 
 
-				if( _levels[ii].get(hash_raw) )
+				if( ii >= minlevel && _levels[ii].get(hash_raw) ) //
+				//if(  _levels[ii].get(hash_raw) ) //
+
 				{
 					break;
 				}
