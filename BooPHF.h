@@ -1039,9 +1039,10 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 					//auto hashes = _hasher(val);
 					hash_pair_t bbhash;  int level;
 					uint64_t level_hash;
-					if(_writeEachLevel)
-						getLevel(bbhash,val,&level, i,i-1);
-					else
+					
+//					if(_writeEachLevel)
+//						getLevel(bbhash,val,&level, i,i-1);
+//					else
 						getLevel(bbhash,val,&level, i);
 
 					
@@ -1085,7 +1086,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 							//ils ont reach ce level
 							//insert elem into curr level on disk --> sera utilise au level+1 , (mais encore besoin filtre)
 							
-							if(_writeEachLevel && i > 0 && i < _nb_levels -1)
+							if(_writeEachLevel && i > 0 && i < _nb_levels -1    &&  ((i&1)==0) )
 							{
 								if(writebuff>=NBBUFF)
 								{
@@ -1344,24 +1345,35 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			//printf("---process level %i   wr %i fast %i ---\n",i,_writeEachLevel,_fastmode);
 			
 			char fname_old[1000];
-			sprintf(fname_old,"temp_p%i_level_%i",_pid,i-2);
+		//	sprintf(fname_old,"temp_p%i_level_%i",_pid,i-2);
+
+			sprintf(fname_old,"temp_p%i_level_%i",_pid,i-3);
 			
 			char fname_curr[1000];
 			sprintf(fname_curr,"temp_p%i_level_%i",_pid,i);
 			
 			char fname_prev[1000];
-			sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-1);
+			if((i&1)==0)
+				sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-2);
+			else
+				sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-1);
+
 			
 			if(_writeEachLevel)
 			{
 				//file management :
 				
-				if(i>2) //delete previous file
+//				if(i>2 ) //delete previous file
+//				{
+//					unlink(fname_old);
+//				}
+				
+				if(i>2 &&   ((i&1)==1)) //delete previous file
 				{
 					unlink(fname_old);
 				}
 				
-				if(i< _nb_levels-1 && i > 0 ) //create curr file
+				if(i< _nb_levels-1 && i > 0     &&  ((i&1)==0)) //create curr file
 				{
 					_currlevelFile = fopen(fname_curr,"w");
 				}
@@ -1385,7 +1397,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			t_arg.level = i;
 			
 			
-			if(_writeEachLevel && (i > 1))
+			//if(_writeEachLevel && (i > 1))
+				if(_writeEachLevel && (i > 2))
+
 			{
 
 				auto data_iterator_level = file_binary(fname_prev);
@@ -1448,16 +1462,16 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			if(_writeEachLevel)
 			{
-				if(i< _nb_levels-1 && i>0)
+				if(i< _nb_levels-1 && i>0  &&  ((i&1)==0))
 				{
 					fflush(_currlevelFile);
 					fclose(_currlevelFile);
 				}
 				
-					if(i== _nb_levels- 1) //delete last file
-					{
-						unlink(fname_prev);
-					}
+//					if(i== _nb_levels- 1) //delete last file
+//					{
+//						unlink(fname_prev);
+//					}
 			}
 
 		}
