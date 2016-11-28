@@ -1086,7 +1086,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 							//ils ont reach ce level
 							//insert elem into curr level on disk --> sera utilise au level+1 , (mais encore besoin filtre)
 							
-							if(_writeEachLevel && i > 0 && i < _nb_levels -1    &&  ((i&1)==0) )
+							if(_writeEachLevel && i > 0 && i < _nb_levels -1    &&  ((i&1)==1) )
 							{
 								if(writebuff>=NBBUFF)
 								{
@@ -1342,7 +1342,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			////alloc the bitset for this level
 			_levels[i].bitset =  bitVector(_levels[i].hash_domain); ;
 
-			//printf("---process level %i   wr %i fast %i ---\n",i,_writeEachLevel,_fastmode);
+			printf("\n---process level %i   wr %i fast %i ---\n",i,(i< _nb_levels-1 && i > 0     &&  ((i&1)==1)),_fastmode);
 			
 			char fname_old[1000];
 		//	sprintf(fname_old,"temp_p%i_level_%i",_pid,i-2);
@@ -1354,9 +1354,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			char fname_prev[1000];
 			if((i&1)==0)
-				sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-2);
-			else
 				sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-1);
+			else
+				sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-2);
 
 			
 			if(_writeEachLevel)
@@ -1368,12 +1368,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 //					unlink(fname_old);
 //				}
 				
-				if(i>2 &&   ((i&1)==1)) //delete previous file
+				if(i>2 &&   ((i&1)==0)) //delete previous file
 				{
-					unlink(fname_old);
+				//	unlink(fname_old);
 				}
 				
-				if(i< _nb_levels-1 && i > 0     &&  ((i&1)==0)) //create curr file
+				if(i< _nb_levels-1 && i > 0     &&  ((i&1)==1)) //create curr file
 				{
 					_currlevelFile = fopen(fname_curr,"w");
 				}
@@ -1462,7 +1462,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			
 			if(_writeEachLevel)
 			{
-				if(i< _nb_levels-1 && i>0  &&  ((i&1)==0))
+				if(i< _nb_levels-1 && i>0  &&  ((i&1)==1))
 				{
 					fflush(_currlevelFile);
 					fclose(_currlevelFile);
