@@ -1345,7 +1345,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			////alloc the bitset for this level
 			_levels[i].bitset =  bitVector(_levels[i].hash_domain); ;
 
-			printf("\n---process level %i   wr %i fast %i ---\n",i,(i< _nb_levels-1 && i > 0     &&  ((i&1)==1)),_fastmode);
+			//printf("\n---process level %i   wr %i fast %i ---\n",i,(i< _nb_levels-1 && i > 0     &&  ((i&1)==1)),_fastmode);
 			
 			char fname_old[1000];
 		//	sprintf(fname_old,"temp_p%i_level_%i",_pid,i-2);
@@ -1373,7 +1373,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				
 				if(i>2 &&   ((i&1)==0)) //delete previous file
 				{
-				//	unlink(fname_old);
+					unlink(fname_old);
 				}
 				
 				if(i< _nb_levels-1 && i > 0     &&  ((i&1)==1)) //create curr file
