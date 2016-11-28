@@ -1038,7 +1038,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 					//auto hashes = _hasher(val);
 					hash_pair_t bbhash;  int level;
-					uint64_t level_hash = getLevel(bbhash,val,&level, i,i-1);
+					uint64_t level_hash;
+					if(_writeEachLevel)
+						getLevel(bbhash,val,&level, i,i-1);
+					else
+						getLevel(bbhash,val,&level, i);
+
+					
 					//uint64_t level_hash = getLevel(bbhash,val,&level, i);
 
 					//__sync_fetch_and_add(& _cptTotalProcessed,1);
