@@ -1035,32 +1035,35 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				{
 					elem_t val = buffer[ii];
 					//printf("processing %llu  level %i\n",val, i);
-
+					
 					//auto hashes = _hasher(val);
 					hash_pair_t bbhash;  int level;
 					uint64_t level_hash;
 					
-//					if(_writeEachLevel)
-//						getLevel(bbhash,val,&level, i,i-1);
-//					else
+					
+					
+					if(_writeEachLevel)
+						getLevel(bbhash,val,&level, i,i-2);
+					else
 						getLevel(bbhash,val,&level, i);
-
+					
+					
 					
 					//uint64_t level_hash = getLevel(bbhash,val,&level, i);
-
+					
 					//__sync_fetch_and_add(& _cptTotalProcessed,1);
 					
 					if(level == i) //insert into lvl i
 					{
 						
 						//	__sync_fetch_and_add(& _cptLevel,1);
-
-	
-
+						
+						
+						
 						
 						if(_fastmode && i == _fastModeLevel)
 						{
-
+							
 							uint64_t idxl2 = __sync_fetch_and_add(& _idxLevelsetLevelFastmode,1);
 							//si depasse taille attendue pour setLevelFastmode, fall back sur slow mode mais devrait pas arriver si hash ok et proba avec nous
 							if(idxl2>= setLevelFastmode.size())
@@ -1068,13 +1071,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 							else
 								setLevelFastmode[idxl2] = val; // create set for fast mode
 						}
-
+						
 						//insert to level i+1 : either next level of the cascade or final hash if last level reached
 						if(i == _nb_levels-1) //stop cascade here, insert into exact hash
 						{
-
+							
 							uint64_t hashidx =  __sync_fetch_and_add (& _hashidx, 1);
-
+							
 							pthread_mutex_lock(&_mutex); //see later if possible to avoid this, mais pas bcp item vont la
 							// calc rank de fin  precedent level qq part, puis init hashidx avec ce rank, direct minimal, pas besoin inser ds bitset et rank
 							_final_hash[val] = hashidx;
@@ -1095,11 +1098,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 									fwrite(myWriteBuff.data(),sizeof(elem_t),writebuff,_currlevelFile);
 									funlockfile(_currlevelFile);
 									writebuff = 0;
-								
+									
 								}
 								
-									myWriteBuff[writebuff++] = val;
-					
+								myWriteBuff[writebuff++] = val;
+								
 							}
 							
 							
@@ -1108,7 +1111,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 							
 							
 							//computes next hash
-
+							
 							if ( level == 0)
 								level_hash = _hasher.h0(bbhash,val);
 							else if ( level == 1)
@@ -1120,10 +1123,10 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 							insertIntoLevel(level_hash,i); //should be safe
 						}
 					}
-
+					
 					nb_done++;
 					if((nb_done&1023) ==0  && _withprogress) {_progressBar.inc(nb_done,tid);nb_done=0; }
-
+					
 				}
 
 				inbuff = 0;
