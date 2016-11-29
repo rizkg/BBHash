@@ -19,8 +19,19 @@
 #include <unistd.h>
 
 
+
 namespace boomphf {
 
+	
+	u_int64_t printPt( pthread_t pt) {
+	  unsigned char *ptc = (unsigned char*)(void*)(&pt);
+		u_int64_t res =0;
+	  for (size_t i=0; i<sizeof(pt); i++) {
+		  res+= (unsigned)(ptc[i]);
+	  }
+		return res;
+	}
+	
 	
 ////////////////////////////////////////////////////////////////
 #pragma mark -
@@ -29,7 +40,8 @@ namespace boomphf {
 
 	
 	// iterator from disk file of u_int64_t with buffered read,   todo template
-	class bfile_iterator : public std::iterator<std::forward_iterator_tag, u_int64_t>{
+	template <typename basetype>
+	class bfile_iterator : public std::iterator<std::forward_iterator_tag, basetype>{
 	public:
 		
 		bfile_iterator()
@@ -37,7 +49,7 @@ namespace boomphf {
 		, _pos(0) ,_inbuff (0), _cptread(0)
 		{
 			_buffsize = 10000;
-			_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
+			_buffer = (basetype *) malloc(_buffsize*sizeof(basetype));
 		}
 		
 		bfile_iterator(const bfile_iterator& cr)
@@ -45,8 +57,8 @@ namespace boomphf {
 			_buffsize = cr._buffsize;
 			_pos = cr._pos;
 			_is = cr._is;
-			_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
-		 memcpy(_buffer,cr._buffer,_buffsize*sizeof(u_int64_t) );
+			_buffer = (basetype *) malloc(_buffsize*sizeof(basetype));
+			 memcpy(_buffer,cr._buffer,_buffsize*sizeof(basetype) );
 			_inbuff = cr._inbuff;
 			_cptread = cr._cptread;
 			_elem = cr._elem;
@@ -56,7 +68,7 @@ namespace boomphf {
 		{
 			//printf("bf it %p\n",_is);
 			_buffsize = 10000;
-			_buffer = (u_int64_t *) malloc(_buffsize*sizeof(u_int64_t));
+			_buffer = (basetype *) malloc(_buffsize*sizeof(basetype));
 			int reso = fseek(_is,0,SEEK_SET);
 			advance();
 		}
@@ -68,7 +80,7 @@ namespace boomphf {
 		}
 		
 		
-		u_int64_t const& operator*()  {  return _elem;  }
+		basetype const& operator*()  {  return _elem;  }
 		
 		bfile_iterator& operator++()
 		{
@@ -95,7 +107,7 @@ namespace boomphf {
 			if(_cptread >= _inbuff)
 			{
 
-				int res = fread(_buffer,sizeof(u_int64_t),_buffsize,_is);
+				int res = fread(_buffer,sizeof(basetype),_buffsize,_is);
 
 				//printf("read %i new elem last %llu  %p\n",res,_buffer[res-1],_is);
 				_inbuff = res; _cptread = 0;
@@ -111,16 +123,17 @@ namespace boomphf {
 			_elem = _buffer[_cptread];
 			_cptread ++;
 		}
-		u_int64_t _elem;
+		basetype _elem;
 		FILE * _is;
 		unsigned long _pos;
 		
-		u_int64_t * _buffer; // for buffered read
+		basetype * _buffer; // for buffered read
 		int _inbuff, _cptread;
 		int _buffsize;
 	};
 	
 	
+	template <typename type_elem>
 	class file_binary{
 	public:
 		
@@ -138,12 +151,12 @@ namespace boomphf {
 			fclose(_is);
 		}
 		
-		bfile_iterator begin() const
+		bfile_iterator<type_elem> begin() const
 		{
-			return bfile_iterator(_is);
+			return bfile_iterator<type_elem>(_is);
 		}
 		
-		bfile_iterator end() const {return bfile_iterator(); }
+		bfile_iterator<type_elem> end() const {return bfile_iterator<type_elem>(); }
 		
 		size_t        size () const  {  return 0;  }//todo ?
 		
@@ -1227,8 +1240,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		{
 			pthread_mutex_init(&_mutex, NULL);
 
+			_pid = getpid() + printPt(pthread_self()) ;// + pthread_self();
+			//printf("pt self %llu  pid %i \n",printPt(pthread_self()),_pid);
 
-			_pid = getpid();
 			_cptTotalProcessed=0;
 
 			
@@ -1250,7 +1264,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			_proba_collision = 1.0 -  pow(((_gamma*(double)_nelem -1 ) / (_gamma*(double)_nelem)),_nelem-1);
 
 			double sum_geom =_gamma * ( 1.0 +  _proba_collision / (1.0 - _proba_collision));
-			printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
+			//printf("proba collision %f  sum_geom  %f   \n",_proba_collision,sum_geom);
 
 			_nb_levels = 25;
 			_levels.resize(_nb_levels);
@@ -1388,7 +1402,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			if(_writeEachLevel && (i > 1))
 			{
 
-				auto data_iterator_level = file_binary(fname_prev);
+				auto data_iterator_level = file_binary<elem_t>(fname_prev);
 				
 				typedef decltype(data_iterator_level.begin()) disklevel_it_type;
 				

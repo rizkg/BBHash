@@ -296,6 +296,8 @@ private:
 u_int64_t nelem = 1000*1000;
 uint nthreads = 1; //warning must be a divisor of nBuckets
 double gammaFactor = 1.0;
+bool write_each = false;
+
 u_int64_t nb_in_bench_file;
 
 
@@ -317,13 +319,14 @@ vector<boophf_t> MPHFs(nBuckets*nMphfByBucket);
 void multipleMPHF(const vector<vector<u_int64_t>>& datas, uint start, uint n,uint bucketNum){
 	for(uint ii(start);ii<start+n;++ii){
 		auto data_iterator2 = boomphf::range(static_cast<const u_int64_t*>(&datas[ii][0]), static_cast<const u_int64_t*>(&datas[ii][0]+datas[ii].size()));
-		MPHFs[bucketNum*nMphfByBucket+ii]=  boomphf::mphf<u_int64_t,hasher_t>(datas[ii].size(),data_iterator2,1,gammaFactor,false);
+		MPHFs[bucketNum*nMphfByBucket+ii]=  boomphf::mphf<u_int64_t,hasher_t>(datas[ii].size(),data_iterator2,1,gammaFactor,write_each,false);
 	}
 }
 
 
 void compactBucket(uint start, uint n){
 	//foreach bucket
+
 	for(uint i(start);i<start+n;++i){
 		auto data_iterator = file_binary(("bucket"+to_string(i)).c_str());
 		vector<vector<u_int64_t>> datas(nMphfByBucket);
@@ -453,7 +456,7 @@ int main (int argc, char* argv[]){
 	bool from_disk = true;
 	bool bench_lookup_out = false;
 	bool on_the_fly= false;
-	bool write_each = false;
+	 write_each = false;
 	if(argc <4 ){
 		printf("Usage :\n");
 		printf("%s <nelem> <nthreads> <gamma>  [options]\n",argv[0]);
@@ -592,6 +595,9 @@ int main (int argc, char* argv[]){
 
 		printf("splitting keys ..\n");
 		
+		double tick_split = get_time_usecs();
+
+		
 		int buffsize = 10000;
 		vector < vector<u_int64_t> > buffers (nBuckets);
 		for(int ii=0; ii<nBuckets;ii++)
@@ -624,6 +630,9 @@ int main (int argc, char* argv[]){
 		for(int ii=1; ii<nBuckets*nMphfByBucket; ii++ ){
 			nb_elem_in_previous_buckets[ii] = nb_elem_in_previous_buckets[ii-1] + elinbuckets[ii-1];
 		}
+
+		double elapsed_split = get_time_usecs() - tick_split;
+		printf("time key split  %.2f s \n", elapsed_split/1000000.0);
 
 		printf("Go compactions !!!\n");
 
