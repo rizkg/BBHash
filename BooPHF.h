@@ -810,6 +810,14 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 #pragma mark level
 ////////////////////////////////////////////////////////////////
 
+	
+	static inline uint64_t fastrange64(uint64_t word, uint64_t p) {
+		//return word %  p;
+
+		return (uint64_t)(((__uint128_t)word * (__uint128_t)p) >> 64);
+
+	}
+	
 	class level{
 	public:
 		level(){ }
@@ -819,7 +827,9 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 		uint64_t get(uint64_t hash_raw)
 		{
-			uint64_t hashi =    hash_raw %  hash_domain;
+		//	uint64_t hashi =    hash_raw %  hash_domain; //
+			//uint64_t hashi = (uint64_t)(  ((__uint128_t) hash_raw * (__uint128_t) hash_domain) >> 64ULL);
+			uint64_t hashi = fastrange64(hash_raw,hash_domain);
 			return bitset.get(hashi);
 		}
 		
@@ -984,7 +994,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			}
 			else
 			{
-				non_minimal_hp =  level_hash %  _levels[level].hash_domain; // in fact non minimal hp would be  + _levels[level]->idx_begin
+				//non_minimal_hp =  level_hash %  _levels[level].hash_domain; // in fact non minimal hp would be  + _levels[level]->idx_begin
+				non_minimal_hp = fastrange64(level_hash,_levels[level].hash_domain);
 			}
 			minimal_hp = _levels[level].bitset.rank(non_minimal_hp );
 		//	printf("lookup %llu  level %i   --> %llu \n",elem,level,minimal_hp);
@@ -1338,7 +1349,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		//insert into bitarray
 		void insertIntoLevel(uint64_t level_hash, int i)
 		{
-			uint64_t hashl =  level_hash % _levels[i].hash_domain;
+		//	uint64_t hashl =  level_hash % _levels[i].hash_domain;
+			uint64_t hashl = fastrange64( level_hash,_levels[i].hash_domain);
 
 			if( _levels[i].bitset.atomic_test_and_set(hashl) )
 			{
