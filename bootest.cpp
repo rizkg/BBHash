@@ -461,14 +461,15 @@ int main (int argc, char* argv[]){
 		printf("Usage :\n");
 		printf("%s <nelem> <nthreads> <gamma>  [options]\n",argv[0]);
 		printf("Options:\n");
-		printf("\t-check\n");
-		printf("\t-bench\n");
+		printf("\t-check  (check correctness of mphf)\n");
+		printf("\t-bench  (bench query time of mphf)\n");
 		printf("\t-save\n");
 		printf("\t-load\n");
 		printf("\t-inram\n");
+		printf("\t-each  (write each intermediate level on disk)\n");
 		printf("\t-buckets\n");
-		printf("\t-outquery\n");  // bench fp rate
-		printf("\t-onthefly\n"); //will generate keys on the fly without storing them at all in ram or on disk
+		printf("\t-outquery (bench the fp rate of the mphf)\n");  // bench fp rate
+		printf("\t-onthefly (generates key on the fly without storing them on disk or in ram)\n");
 	
 
 
