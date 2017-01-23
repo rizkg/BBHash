@@ -1128,11 +1128,12 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			t_arg.level = i;
 			if(_fastmode && i >= (_fastModeLevel+1))
 			{
-				auto data_iterator = boomphf::range(static_cast<const elem_t*>( &setLevelFastmode[0]), static_cast<const elem_t*>( (&setLevelFastmode[0]) +setLevelFastmode.size()));
-                typedef decltype(data_iterator.begin()) fastmode_it_type;
-				t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(data_iterator.begin()));
-				t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(data_iterator.end()));
 
+
+				typedef decltype(setLevelFastmode.begin()) fastmode_it_type;
+				t_arg.it_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(setLevelFastmode.begin()));
+				t_arg.until_p =  std::static_pointer_cast<void>(std::make_shared<fastmode_it_type>(setLevelFastmode.end()));
+				
                 /* we'd like to do t_arg.it = data_iterator.begin() but types are different;
                     so, casting to (void*) because of that; and we remember the type in the template */
 
@@ -1148,6 +1149,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			for(int ii=0;ii<_num_thread;ii++)
 			{
 				pthread_join(tab_threads[ii], NULL);
+
 			}
 			//printf("\ngoing to level %i  : %llu elems  %.2f %%  expected : %.2f %% \n",i,_cptLevel,100.0* _cptLevel/(float)_nelem,100.0* pow(_proba_collision,i) );
 
