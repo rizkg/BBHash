@@ -905,6 +905,10 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 				_writeEachLevel =true;
 				_fastmode = false;
 			}
+			else
+			{
+				_writeEachLevel = false;
+			}
 			
 			setup();
 
