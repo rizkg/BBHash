@@ -456,7 +456,7 @@ int main (int argc, char* argv[]){
 	bool from_disk = true;
 	bool bench_lookup_out = false;
 	bool on_the_fly= false;
-	 write_each = false;
+	 write_each = true;
 	if(argc <4 ){
 		printf("Usage :\n");
 		printf("%s <nelem> <nthreads> <gamma>  [options]\n",argv[0]);
@@ -466,7 +466,7 @@ int main (int argc, char* argv[]){
 		printf("\t-save\n");
 		printf("\t-load\n");
 		printf("\t-inram\n");
-		printf("\t-each  (write each intermediate level on disk)\n");
+		printf("\t-nodisk  (do not write each intermediate level on disk)\n");
 		printf("\t-buckets\n");
 		printf("\t-outquery (bench the fp rate of the mphf)\n");  // bench fp rate
 		printf("\t-onthefly (generates key on the fly without storing them on disk or in ram)\n");
@@ -491,7 +491,7 @@ int main (int argc, char* argv[]){
 		if(!strcmp("-buckets",argv[ii])) buckets= true;
 		if(!strcmp("-outquery",argv[ii])) bench_lookup_out= true;
 		if(!strcmp("-onthefly",argv[ii])) on_the_fly= true;
-		if(!strcmp("-each",argv[ii])) write_each= true;
+		if(!strcmp("-nodisk",argv[ii])) write_each= false;
 
 	}
 
