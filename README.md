@@ -26,6 +26,9 @@ Here is a simple example showing how to build and query a mphf with input keys i
      //query the mphf :
      uint64_t  idx = bphf->lookup(input_keys[0]);
 
+# Types supported
+The master branch works with Plain Old Data types only (POD). To work with other types, use the "alltypes" branch (it runs slighlty slower). The alltypes branch includes a sample code with strings.
+
 # How to run test
 
 A sample usage is provided in file example.cpp, compile and run with: ( params are nb_elements nb_threads)
