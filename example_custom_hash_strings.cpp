@@ -74,25 +74,26 @@ int main (int argc, char* argv[]){
 	uint64_t ii, jj;
 	std::vector<std::string> data;
 
-	int string_size = 18;
+	int string_size = 100;
 	/////  generation of random strings
-	
-	char * tempchar = (char *) malloc(sizeof(string_size)*sizeof(char));
-	string lolstr;
-	ifstream inputfile("StringFile.txt",ios::in);
+
+	char * tempchar = (char *) malloc(string_size*sizeof(char));
+
+	//string lolstr;
+	//ifstream inputfile("StringFile.txt",ios::in);
 	for (u_int64_t i = 0; i < nelem; i++){
 		//RANDOM STRINGS
-		//~ gen_random(tempchar,string_size);
-		//~ data.push_back((string)tempchar);
+		 gen_random(tempchar,string_size);
+		 data.push_back((string)tempchar);
+		
 		//STRING READ FROM FILE
-		getline(inputfile,lolstr);
-		data.push_back(lolstr);
+		//getline(inputfile,lolstr);
+		//data.push_back(lolstr);
 	}
 	
 	
 	//////////////////
 	// at this point, array data contains a set of nelem random unique keys
-	
 	
 	boophf_t * bphf = NULL;
 	double t_begin,t_end; struct timeval timet;
@@ -123,7 +124,7 @@ int main (int argc, char* argv[]){
 	}
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
 	double elapsed2 = t_end - t_begin;
-	printf("Query of 1M key  in %.2fs\n", nelem,elapsed2);
+	printf("Query of %llu key  in %.2fs\n", nelem,elapsed2);
 	
 	delete bphf;
 	return EXIT_SUCCESS;
