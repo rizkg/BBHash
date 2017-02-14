@@ -118,12 +118,14 @@ int main (int argc, char* argv[]){
 	printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
 	printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
 	gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
+	
 	//query mphf like this
-	for (u_int64_t i = 0; i < 1000000; i++){
+	for (u_int64_t i = 0; i < nelem; i++){
 		uint64_t  idx = bphf->lookup(data[i]);
 	}
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
 	double elapsed2 = t_end - t_begin;
+
 	printf("Query of %llu key  in %.2fs\n", nelem,elapsed2);
 	
 	delete bphf;
