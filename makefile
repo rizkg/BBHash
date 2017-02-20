@@ -1,7 +1,7 @@
 # CC=/usr/bin/g++
 CXX ?= g++
 CFLAGS = -O3 -std=c++11 -lpthread
-EXEC=Bootest example example_custom_hash example_custom_hash_strings
+EXEC=Bootest example example_custom_hash example_custom_hash_strings BootestFile
 all: $(EXEC)
 
 ifeq ($(prof),1)
@@ -30,11 +30,13 @@ example_custom_hash_strings: example_custom_hash_strings.cpp
 Bootest:  bootest.cpp
 	$(CXX) -o $@  $^ $(CFLAGS)
 
+BootestFile:  bootestFile.cpp
+	$(CXX) -o $@  $^ $(CFLAGS)
+
 %.o: %.cpp %.h
 	$(CXX) -o $@ -c $< $(CFLAGS)
 
 
 clean:
 	rm -rf *.o
-	rm Bootest
-	rm example
+	rm Bootest BootestFile example_custom_hash_strings example_custom_hash example keyfile
