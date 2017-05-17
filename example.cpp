@@ -70,10 +70,10 @@ int main (int argc, char* argv[]){
 	// but could be from a user defined iterator (enabling keys to be read from a file or from some complex non-contiguous structure)
 	auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
 	
-	double gammaFactor = 1.0; // lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query
+	double gammaFactor = 2.0; // lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query
 
 	//build the mphf
-	bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);
+	bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);// gammaFactor param is optional, will be 2 by default if not provided
 	
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
 	double elapsed = t_end - t_begin;

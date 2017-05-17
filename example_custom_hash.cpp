@@ -60,7 +60,7 @@ int main (int argc, char* argv[]){
 	uint64_t ii, jj;
 	u_int64_t *data;
 
-	/////  generation of random keys
+	/////  generation of random keys for this test
 	uint64_t rab = 100;
 	static std::mt19937_64 rng;
 	rng.seed(std::mt19937_64::default_seed); //default seed
@@ -100,7 +100,7 @@ int main (int argc, char* argv[]){
 	double gammaFactor = 2.0; // lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query
 	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key )
 
-	//build the mphf
+	//build the mphf , templates parameters are : key types and custom hash function
 	bphf = new boomphf::mphf<u_int64_t,Custom_uint64_Hasher>(nelem,data_iterator,nthreads,gammaFactor);
 	
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
