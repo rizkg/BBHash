@@ -68,6 +68,8 @@ int main (int argc, char* argv[]){
 	
 	// mphf takes as input a c++ range. A simple array of keys can be wrapped with boomphf::range
 	// but could be from a user defined iterator (enabling keys to be read from a file or from some complex non-contiguous structure)
+	// if your input data is in a std::vector, it is already a c++ range, you can provide it std::vector directly
+
 	auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
 	
 	double gammaFactor = 2.0; // lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query

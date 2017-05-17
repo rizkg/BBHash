@@ -1072,17 +1072,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		 template <typename Iterator> void fillBuffer (std::vector<internal_hash_t>  & buffer,std::shared_ptr<Iterator> shared_it, std::shared_ptr<Iterator> until_p,
 												 uint64_t & inbuff, bool & isRunning)
 		{
-//#ifdef PDEBUG
-//			printf("fillbuffer key_t \n");
-//#endif
+
 			auto until = *until_p;
 			pthread_mutex_lock(&_mutex);
 			for(; inbuff<NBBUFF && (*shared_it)!=until;  ++(*shared_it))
 			{
 				buffer[inbuff]= _hasher.hashpair128(*(*shared_it));
-//#ifdef PDEBUG
-//				printf("%llu   : H128  %llu, %llu   inbuff %llu\n",*(*shared_it),buffer[inbuff][0],buffer[inbuff][1],inbuff );
-//#endif
+
 				inbuff++;
 			}
 			if((*shared_it)==until) isRunning =false;
@@ -1104,10 +1100,6 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		template <typename Iterator> void fillBufferCommon128 (std::vector<internal_hash_t>  & buffer,std::shared_ptr<Iterator> shared_it, std::shared_ptr<Iterator> until_p,
 															uint64_t & inbuff, bool & isRunning)
 		{
-			
-//#ifdef PDEBUG
-//			printf("fillbuffer hash128_t \n");
-//#endif
 			
 			auto until = *until_p;
 			pthread_mutex_lock(&_mutex);
