@@ -23,7 +23,7 @@
 namespace boomphf {
 
 	
-	u_int64_t printPt( pthread_t pt) {
+	inline u_int64_t printPt( pthread_t pt) {
 	  unsigned char *ptc = (unsigned char*)(void*)(&pt);
 		u_int64_t res =0;
 	  for (size_t i=0; i<sizeof(pt); i++) {
