@@ -11,6 +11,10 @@ ifeq ($(deb),1)
  CFLAGS+= -O0 -DASSERTS -g
 endif
 
+ifeq ($(sani),1)
+ CFLAGS= -std=c++11 -lpthread -fsanitize=address -fno-omit-frame-pointer -O1 -fno-optimize-sibling-calls -g
+endif
+
 .PHONY: test clean
 
 
