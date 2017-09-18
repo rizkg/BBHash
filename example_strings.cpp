@@ -18,8 +18,19 @@ using namespace std;
 class Custom_string_Hasher
 {
 public:
-	// the class should have operator () with this signature :
-	uint64_t operator ()   (std::string key, uint64_t seed=0) const
+    typedef std::string Item;
+    typedef std::pair<uint64_t,uint64_t> hash_pair_t;
+
+    public:
+    hash_pair_t operator ()  (const Item& key) const  {  
+        hash_pair_t result;
+        result.first =  singleHasher (key, 0xAAAAAAAA55555555ULL);;
+        result.second =  singleHasher (key, 0x33333333CCCCCCCCULL);;
+
+        return result;
+    }
+
+	uint64_t singleHasher (std::string key, uint64_t seed=0) const
 	{
 		
 
@@ -34,7 +45,7 @@ public:
 
 
 //then tell BBhash to use this custom hash : (also appears below, line 104)
-typedef boomphf::mphf<  std::string, Custom_string_Hasher  > boophf_t;
+typedef boomphf::mphf<  Custom_string_Hasher  > boophf_t;
 
 
 
@@ -109,14 +120,14 @@ int main (int argc, char* argv[]){
 	// gamma = 2 is a good tradeoff (leads to approx 3.7 bits/key )
 
 	//build the mphf
-	bphf = new boomphf::mphf<std::string,Custom_string_Hasher>(nelem,data,nthreads,gammaFactor);
+	bphf = new boomphf::mphf<Custom_string_Hasher>(nelem,data,nthreads,gammaFactor);
 	
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
 	double elapsed = t_end - t_begin;
 	
 	
 	printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
-	printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+	printf("boophf  bits/elem : %f\n",(float) (bphf->mem_size()*8)/nelem);
 	gettimeofday(&timet, NULL); t_begin = timet.tv_sec +(timet.tv_usec/1000000.0);
 	
 	//query mphf like this

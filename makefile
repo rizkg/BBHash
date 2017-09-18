@@ -1,8 +1,8 @@
 # CC=/usr/bin/g++
 CXX ?= g++
 CFLAGS = -O3 -std=c++11 -lpthread
-EXEC=Bootest example example_custom_hash example_custom_hash_strings example_no_copy
-all: $(EXEC)
+EXEC=Bootest example example_strings
+al: $(EXEC)
 
 ifeq ($(prof),1)
  CFLAGS+= -pg
@@ -20,12 +20,8 @@ all: $(EXEC)
 
 example: example.cpp
 	$(CXX) -o $@  $^ $(CFLAGS)
-example_no_copy: example_no_copy.cpp
-	$(CXX) -o $@  $^ $(CFLAGS)
-example_custom_hash: example_custom_hash.cpp
-	$(CXX) -o $@  $^ $(CFLAGS)
 
-example_custom_hash_strings: example_custom_hash_strings.cpp
+example_strings: example_strings.cpp
 	$(CXX) -o $@  $^ $(CFLAGS)
 
 

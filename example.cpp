@@ -10,8 +10,39 @@
 
 using namespace std;
 
-typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
-typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
+template <typename Item> class SingleHashFunctor
+{
+    typedef std::pair<uint64_t,uint64_t> hash_pair_t;
+
+    public:
+    hash_pair_t operator ()  (const Item& key) const  {  
+        hash_pair_t result;
+        result.first =  singleHasher (key, 0xAAAAAAAA55555555ULL);;
+        result.second =  singleHasher (key, 0x33333333CCCCCCCCULL);;
+
+        return result;
+    }
+
+    uint64_t singleHasher(const Item & key, uint64_t seed) const
+    {
+
+        uint64_t hash = seed;
+        hash ^= (hash <<  7) ^  key * (hash >> 3) ^ (~((hash << 11) + (key ^ (hash >> 5))));
+        hash = (~hash) + (hash << 21);
+        hash = hash ^ (hash >> 24);
+        hash = (hash + (hash << 3)) + (hash << 8);
+        hash = hash ^ (hash >> 14);
+        hash = (hash + (hash << 2)) + (hash << 4);
+        hash = hash ^ (hash >> 28);
+        hash = hash + (hash << 31);
+        return hash;
+    }
+};
+
+
+ 
+typedef SingleHashFunctor<u_int64_t>  hasher_t;
+typedef boomphf::mphf<  hasher_t  > boophf_t;
 
 int main (int argc, char* argv[]){
 	
@@ -75,14 +106,14 @@ int main (int argc, char* argv[]){
 	double gammaFactor = 2.0; // lowest bit/elem is achieved with gamma=1, higher values lead to larger mphf but faster construction/query
 
 	//build the mphf
-	bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor);// gammaFactor param is optional, will be 2 by default if not provided
+	bphf = new boomphf::mphf<hasher_t>(nelem,data_iterator,nthreads,gammaFactor);// gammaFactor param is optional, will be 2 by default if not provided
 	
 	gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
 	double elapsed = t_end - t_begin;
 	
 	
 	printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
-	printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+	printf("boophf  bits/elem : %f\n",(float) (bphf->mem_size()*8)/nelem);
 	
 	//query mphf like this
 	uint64_t  idx = bphf->lookup(data[0]);

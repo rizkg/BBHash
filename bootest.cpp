@@ -49,9 +49,39 @@ uint64_t random64 (){
 	return res;
 }
 
+// now, BBHash code ( in internal_hash branch) doesn't provide hashing functions for even uint64's
+// so here we provide a hash function (which used to be in BooPHF.h, but Anton removed it, fine, let's have it here!)
+template <typename Item> class SingleHashFunctor
+{
+    typedef std::pair<uint64_t,uint64_t> hash_pair_t;
 
-typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
-typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
+    public:
+    hash_pair_t operator ()  (const Item& key) const  {  
+        hash_pair_t result;
+        result.first =  singleHasher (key, 0xAAAAAAAA55555555ULL);;
+        result.second =  singleHasher (key, 0x33333333CCCCCCCCULL);;
+
+        return result;
+    }
+
+    uint64_t singleHasher(const Item & key, uint64_t seed) const
+    {
+
+        uint64_t hash = seed;
+        hash ^= (hash <<  7) ^  key * (hash >> 3) ^ (~((hash << 11) + (key ^ (hash >> 5))));
+        hash = (~hash) + (hash << 21);
+        hash = hash ^ (hash >> 24);
+        hash = (hash + (hash << 3)) + (hash << 8);
+        hash = hash ^ (hash >> 14);
+        hash = (hash + (hash << 2)) + (hash << 4);
+        hash = hash ^ (hash >> 28);
+        hash = hash + (hash << 31);
+        return hash;
+    }
+};
+
+typedef SingleHashFunctor<u_int64_t>  hasher_t;
+typedef boomphf::mphf<  hasher_t  > boophf_t;
 
 
 // iterator from disk file of u_int64_t with buffered read,   todo template
@@ -554,18 +584,18 @@ int main (int argc, char* argv[]){
 		if (on_the_fly)
 		{
 			auto data_iterator =  uint64_range(nelem,nelem) ;
-			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);//,true,0.0
+			bphf = new boomphf::mphf<hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);//,true,0.0
 		}
 		else if(from_disk)
 		{
 			printf("using gamma %.2f \n",gammaFactor);
 			auto data_iterator = file_binary("keyfile");
-			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);
+			bphf = new boomphf::mphf<hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);
 		}
 		else
 		{
 			auto data_iterator = boomphf::range(static_cast<const u_int64_t*>(data), static_cast<const u_int64_t*>(data+nelem));
-			bphf = new boomphf::mphf<u_int64_t,hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);
+			bphf = new boomphf::mphf<hasher_t>(nelem,data_iterator,nthreads,gammaFactor,write_each);
 		}
 
 		gettimeofday(&timet, NULL); t_end = timet.tv_sec +(timet.tv_usec/1000000.0);
@@ -574,12 +604,12 @@ int main (int argc, char* argv[]){
 
 
 		printf("BooPHF constructed perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
-		printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+		printf("boophf  bits/elem : %f\n",(float) (bphf->mem_size()*8)/nelem);
 
 	}
 	else{
 		//assumes the mphf was saved before, reload it
-		bphf = new boomphf::mphf<u_int64_t,hasher_t>();
+		bphf = new boomphf::mphf<hasher_t>();
 
 		printf("Loading a BooPHF with  %lli elements  \n",nelem);
 
@@ -592,7 +622,7 @@ int main (int argc, char* argv[]){
 		double elapsed = t_end - t_begin;
 
 		printf("BooPHF re-loaded perfect hash for %llu keys in %.2fs\n", nelem,elapsed);
-		printf("boophf  bits/elem : %f\n",(float) (bphf->totalBitSize())/nelem);
+		printf("boophf  bits/elem : %f\n",(float) (bphf->mem_size()*8)/nelem);
 	}
 
 
