@@ -1,7 +1,7 @@
 # CC=/usr/bin/g++
 CXX ?= g++
 CFLAGS = -O3 -std=c++11 -lpthread
-EXEC=Bootest example example_strings
+EXEC=Bootest example example_strings example128
 al: $(EXEC)
 
 ifeq ($(prof),1)
@@ -19,6 +19,9 @@ test:
 all: $(EXEC)
 
 example: example.cpp
+	$(CXX) -o $@  $^ $(CFLAGS)
+
+example128: example128.cpp
 	$(CXX) -o $@  $^ $(CFLAGS)
 
 example_strings: example_strings.cpp
