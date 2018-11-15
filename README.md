@@ -10,7 +10,7 @@ It is easy to include in other projects (just include a single .h file) and has 
 A preprint paper is available on arXiv: https://arxiv.org/abs/1702.03154
 
 # Usage
-Here is a simple example showing how to build and query a mphf with input keys in a std::vector<u_int64_t> . Input keys can also be read from a disk file, or from some user-defined iterator.
+Here is a simple example showing how to build and query a mphf with input keys in a std::vector<u_int64_t> . BBHash is mainly designed for de-duplicated input. Keys can be read from a disk file, or from some user-defined iterator.
 
      #include "BooPHF.h"
      //tells bbhash to use included hash function working on u_int64_t input keys :
