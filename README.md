@@ -41,18 +41,21 @@ File Bootest.cpp contains more options, use ./Bootest with  -check to check corr
     
 Here is a sample output :
     
-    $./Bootest 100000000 8 -check -bench
+
+
+    ./Bootest 100000000 8 1.0 -check -bench
     key file generated 
     Construct a BooPHF with  100000000 elements  
-    [Building BooPHF]  100  %   elapsed:   0 min 31 sec   remaining:   0 min 0  sec
-    BooPHF constructed perfect hash for 100000000 keys in 30.95s
-    Bitarray       305808384  bits (99.49 %)   (array + ranks )
-    final hash       1557024  bits (0.51 %) (nb in final hash 4634)
-    boophf  bits/elem : 3.073654
+    for info, total work write each  : 3.718    total work inram from level 8 : 9.408  total work raw : 25.000 
+    [Building BooPHF]  100  %   elapsed:   0 min 10 sec   remaining:   0 min 0  sec
+    BooPHF constructed perfect hash for 100000000 keys in 10.25s
+    Bitarray       305808384  bits (100.00 %)   (array + ranks )
+    Last level hash             0  bits (0.00 %) (nb in last level hash 0)
+    boophf  bits/elem : 3.058084
      --- boophf working correctly --- 
-    bench lookups  sample size 9999872 
-    BBhash bench lookups average 258.06 ns +- stddev  5.55 %   (fingerprint 5000111281850410) 
-
+    bench lookups  sample size 10000000 
+    BBhash bench lookups average 243.84 ns +- stddev  13.01 %   (fingerprint 4999580507664480)
+ 
 
 
 

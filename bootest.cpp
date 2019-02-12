@@ -482,6 +482,8 @@ int main (int argc, char* argv[]){
 		gammaFactor = atoi(argv[3]);
 	}
 
+
+	
 	for (int ii=4; ii<argc; ii++){
 		if(!strcmp("-check",argv[ii])) check_correctness= true;
 		if(!strcmp("-bench",argv[ii])) bench_lookup= true;
@@ -493,6 +495,14 @@ int main (int argc, char* argv[]){
 		if(!strcmp("-onthefly",argv[ii])) on_the_fly= true;
 		if(!strcmp("-nodisk",argv[ii])) write_each= false;
 
+	}
+
+	
+	if(gammaFactor == 0) {
+		fprintf(stderr,"gamma value error\n");
+		fprintf(stderr,"Usage should be \n");
+		fprintf(stderr,"%s <nelem> <nthreads> <gamma>  [options]\n",argv[0]);
+		exit(1);
 	}
 
 	
