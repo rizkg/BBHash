@@ -11,7 +11,7 @@ It is easy to include in other projects (just include a single .h file) and has 
 A. Limasset, G. Rizk, R. Chikhi, P. Peterlongo, _Fast and Scalable Minimal Perfect Hashing for Massive Key Sets_, SEA 2017: http://drops.dagstuhl.de/opus/volltexte/2017/7619/pdf/LIPIcs-SEA-2017-25.pdf
 
 ```
-@InProceedings{limasset_et_al:LIPIcs:2017:7619,
+@InProceedings{bbhash,
   author ={Antoine Limasset and Guillaume Rizk and Rayan Chikhi and Pierre Peterlongo},
   title ={{Fast and Scalable Minimal Perfect Hashing for Massive Key Sets}},
   booktitle ={16th International Symposium on Experimental Algorithms (SEA 2017)},
