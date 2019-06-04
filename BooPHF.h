@@ -673,11 +673,11 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		//for debug purposes
 		void print() const
 		{
-			printf("bit array of size %lli: \n",_size);
+			printf("bit array of size %lli: \n",(long long int)_size);
 			for(uint64_t ii = 0; ii< _size; ii++)
 			{
 				if(ii%10==0)
-					printf(" (%llu) ",ii);
+					printf(" (%llu) ",(long long unsigned int)ii);
 				int val = (_bitArray[ii >> 6] >> (ii & 63 ) ) & 1;
 				printf("%i",val);
 			}
@@ -686,7 +686,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			printf("rank array : size %lu \n",_ranks.size());
 			for (uint64_t ii = 0; ii< _ranks.size(); ii++)
 			{
-				printf("%llu :  %lli,  ",ii,_ranks[ii]);
+				printf("%llu :  %lli,  ",(long long unsigned int)ii,(long long int)_ranks[ii]);
 			}
 			printf("\n");
 		}
