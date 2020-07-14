@@ -784,7 +784,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		}
 
 
-		uint64_t lookup(elem_t elem)
+		uint64_t lookup(const elem_t &elem)
 		{
 			if(! _built) return ULLONG_MAX;
 			
@@ -1059,7 +1059,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 
 		//compute level and returns hash of last level reached
-		uint64_t getLevel(hash_pair_t & bbhash, elem_t val,int * res_level, int maxlevel = 100)
+		uint64_t getLevel(hash_pair_t & bbhash, const elem_t &val, int * res_level, int maxlevel = 100)
 		{
 			int level = 0;
 			uint64_t hash_raw=0;
