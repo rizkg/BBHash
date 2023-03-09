@@ -1,6 +1,6 @@
 # CC=/usr/bin/g++
 CXX ?= g++
-CFLAGS = -O3 -std=c++11 -lpthread -Wno-unused-result -Wno-format
+CFLAGS = -O3 -std=c++11 -lpthread
 EXEC=Bootest example example_custom_hash
 all: $(EXEC)
 
@@ -40,3 +40,4 @@ clean:
 	rm -rf *.o
 	rm Bootest
 	rm example
+	rm example_custom_hash
