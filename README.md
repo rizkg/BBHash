@@ -28,18 +28,18 @@ A. Limasset, G. Rizk, R. Chikhi, P. Peterlongo, _Fast and Scalable Minimal Perfe
 ```
 
 # Usage
-Here is a simple example showing how to build and query a mphf with input keys in a std::vector<u_int64_t> . BBHash is mainly designed for de-duplicated input. Keys can be read from a disk file, or from some user-defined iterator.
+Here is a simple example showing how to build and query a mphf with input keys in a std::vector<uint64_t> . BBHash is mainly designed for de-duplicated input. Keys can be read from a disk file, or from some user-defined iterator.
 
      #include "BooPHF.h"
-     //tells bbhash to use included hash function working on u_int64_t input keys :
-     typedef boomphf::SingleHashFunctor<u_int64_t>  hasher_t;
-     typedef boomphf::mphf<  u_int64_t, hasher_t  > boophf_t;
+     //tells bbhash to use included hash function working on uint64_t input keys :
+     typedef boomphf::SingleHashFunctor<uint64_t>  hasher_t;
+     typedef boomphf::mphf<  uint64_t, hasher_t  > boophf_t;
      
-    std::vector<u_int64_t> input_keys;
+    std::vector<uint64_t> input_keys;
     //
     ... fill the input_keys vector
     //build the mphf  
-    boophf_t * bphf = new boomphf::mphf<u_int64_t,hasher_t>(input_keys.size(),input_keys,nthreads);
+    boophf_t * bphf = new boomphf::mphf<uint64_t,hasher_t>(input_keys.size(),input_keys,nthreads);
      
      //query the mphf :
      uint64_t  idx = bphf->lookup(input_keys[0]);
