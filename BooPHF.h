@@ -17,15 +17,16 @@
 #include <string.h>
 #include <memory> // for make_shared
 #include <unistd.h>
+#include <inttypes.h>
 
 
 
 namespace boomphf {
 
 	
-	inline u_int64_t printPt( pthread_t pt) {
+	inline uint64_t printPt( pthread_t pt) {
 	  unsigned char *ptc = (unsigned char*)(void*)(&pt);
-		u_int64_t res =0;
+		uint64_t res =0;
 	  for (size_t i=0; i<sizeof(pt); i++) {
 		  res+= (unsigned)(ptc[i]);
 	  }
@@ -39,7 +40,7 @@ namespace boomphf {
 ////////////////////////////////////////////////////////////////
 
 	
-	// iterator from disk file of u_int64_t with buffered read,   todo template
+	// iterator from disk file of uint64_t with buffered read,   todo template
 	template <typename basetype>
 	class bfile_iterator : public std::iterator<std::forward_iterator_tag, basetype>{
 	public:
@@ -967,7 +968,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 		}
 
 
-		uint64_t lookup(elem_t elem)
+		uint64_t lookup(const elem_t &elem)
 		{
 			if(! _built) return ULLONG_MAX;
 			
@@ -1023,8 +1024,8 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 			uint64_t totalsize =  totalsizeBitset +  _final_hash.size()*42*8 ;  // unordered map takes approx 42B per elem [personal test] (42B with uint64_t key, would be larger for other type of elem)
 
-			printf("Bitarray    %12llu  bits (%.2f %%)   (array + ranks )\n",
-				   (long long unsigned int)totalsizeBitset, 100*(float)totalsizeBitset/totalsize);
+			printf("Bitarray    %" PRIu64 "  bits (%.2f %%)   (array + ranks )\n",
+				   totalsizeBitset, 100*(float)totalsizeBitset/totalsize);
 			printf("Last level hash  %12lu  bits (%.2f %%) (nb in last level hash %lu)\n",
 				   _final_hash.size()*42*8, 100*(float)(_final_hash.size()*42*8)/totalsize,
 				   _final_hash.size() );
@@ -1314,7 +1315,7 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 
 
 		//compute level and returns hash of last level reached
-		uint64_t getLevel(hash_pair_t & bbhash, elem_t val,int * res_level, int maxlevel = 100, int minlevel =0)
+		uint64_t getLevel(hash_pair_t & bbhash, const elem_t &val, int * res_level, int maxlevel = 100, int minlevel =0)
 		//uint64_t getLevel(hash_pair_t & bbhash, elem_t val,int * res_level, int maxlevel = 100, int minlevel =0)
 
 		{
