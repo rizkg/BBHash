@@ -1375,13 +1375,13 @@ we need this 2-functors scheme because HashFunctors won't work with unordered_ma
 			//printf("---process level %i   wr %i fast %i ---\n",i,_writeEachLevel,_fastmode);
 			
 			char fname_old[1000];
-			sprintf(fname_old,"temp_p%i_level_%i",_pid,i-2);
+			snprintf(fname_old,1000,"temp_p%i_level_%i",_pid,i-2);
 			
 			char fname_curr[1000];
-			sprintf(fname_curr,"temp_p%i_level_%i",_pid,i);
+			snprintf(fname_curr,1000,"temp_p%i_level_%i",_pid,i);
 			
 			char fname_prev[1000];
-			sprintf(fname_prev,"temp_p%i_level_%i",_pid,i-1);
+			snprintf(fname_prev,1000,"temp_p%i_level_%i",_pid,i-1);
 			
 			if(_writeEachLevel)
 			{
